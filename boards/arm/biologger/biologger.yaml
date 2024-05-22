@@ -1,0 +1,15 @@
+identifier: biologger
+name: BioLogger
+type: mcu
+arch: arm
+toolchain:
+  - zephyr
+  - gnuarmemb
+  - xtools
+ram: 256
+flash: 1024
+supported:
+  - i2c
+  - gpio
+  - usb_device
+vendor: other
