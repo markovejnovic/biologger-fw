@@ -1,0 +1,7 @@
+description: |
+  Li-Cor Li-550 Driver. Controls the Trisonica Mini to collect its reported
+  data.
+
+compatible: "licor,li_550"
+
+include: uart-device.yaml
