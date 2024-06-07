@@ -1,0 +1,13 @@
+# Copyright (c) 2024 Marko Vejonvic
+# SPDX-License-Identifier: Apache-2.0
+
+description: GPIO pin to switch the GNSS module on or off
+
+compatible: "gnss-switch"
+
+properties:
+  gpios:
+    type: phandle-array
+    required: true
+    description: |
+      The GPIO connected to the gate driver for the MOSFET.

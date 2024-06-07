@@ -19,23 +19,34 @@
 		zephyr,flash = &flash0;
 	};
 
+    gnss_disable: gnss_disable {
+        compatible = "gnss-switch";
+        gpios = <&gpiob 12 GPIO_ACTIVE_LOW>;
+        status = "okay";
+    };
+
     leds: leds {
         compatible = "gpio-leds";
 
-        status_led {
+        status_led: led_0 {
             gpios = <&gpiob 10 GPIO_ACTIVE_LOW>;
             label = "Status LED";
+            status = "okay";
         };
 
-        warning_led {
+        warning_led: led_1 {
             gpios = <&gpiob 2 GPIO_ACTIVE_LOW>;
             label = "Warning LED";
+            status = "okay";
         };
     };
-};
 
-&clk_lsi {
-    status = "okay";
+    aliases {
+        board-usart-1 = &usart1;
+        board-usart-2 = &usart6;
+        board-usart-3 = &usart3;
+        trutime-clock = &rtc;
+    };
 };
 
 &clk_hse {
@@ -53,7 +64,10 @@
 &pll {
 	div-m = <25>;
 	mul-n = <384>;
-	div-p = <4>;
+    // TODO(markovejnovic): This could, in theory be bumped up to 4 to help
+    // boost the APB2 clock domain, but causes the SDMMC clock to be unusable.
+    // That cock should be moved to the PLL48CLK domain.
+	div-p = <8>;
 	div-q = <8>;
 	clocks = <&clk_hse>;
 	status = "okay";
@@ -61,7 +75,7 @@
 
 &rcc {
 	clocks = <&pll>;
-	clock-frequency = <DT_FREQ_M(96)>;
+	clock-frequency = <DT_FREQ_M(48)>;
 	ahb-prescaler = <1>;
 	apb1-prescaler = <2>;
 	apb2-prescaler = <1>;
@@ -74,25 +88,43 @@
 &usart1 {
 	pinctrl-0 = <&usart1_tx_pb6 &usart1_rx_pb7>;
 	pinctrl-names = "default";
-	current-speed = <115200>;
+	current-speed = <9600>;
 	status = "okay";
 };
 
 &usart6 {
 	pinctrl-0 = <&usart6_tx_pc6 &usart6_rx_pc7>;
 	pinctrl-names = "default";
-	current-speed = <115200>;
+	current-speed = <9600>;
 	status = "okay";
-
-    trisonica: li_550 {
-        compatible = "licor,li_550";
-        status = "okay";
-    };
 };
 
 &usart3 {
 	pinctrl-0 = <&usart3_tx_pc10 &usart3_rx_pc11>;
 	pinctrl-names = "default";
-	current-speed = <115200>;
+	current-speed = <9600>;
+	status = "okay";
+};
+
+&usart2 {
+	pinctrl-0 = <&usart2_tx_pa2 &usart2_rx_pa3>;
+	pinctrl-names = "default";
+	current-speed = <9600>;
+	status = "okay";
+
+    gnss: gnss-nmea-generic {
+        compatible = "gnss-nmea-generic";
+    };
+};
+
+&sdmmc1 {
+    pinctrl-0 = <&sdio_d0_pc8 &sdio_ck_pc12 &sdio_cmd_pd2>;
+    pinctrl-names = "default";
+    status = "okay";
+};
+
+&rtc {
+	clocks = <&rcc STM32_CLOCK_BUS_APB1 0x10000000>,
+		 <&rcc STM32_SRC_LSE RTC_SEL(1)>;
 	status = "okay";
 };
