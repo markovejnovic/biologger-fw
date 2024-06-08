@@ -14,14 +14,18 @@
 #include <zephyr/device.h>
 #include "trutime.h"
 #include "storage.h"
+#include "zephyr/drivers/gpio.h"
 
 LOG_MODULE_REGISTER(main);
 
 OBSERVER_DECL(main_observer);
 TRUTIME_DECL(time_provider);
 
+#define TEMPSENS DT_NODELABEL(zac_wire)
+static const struct gpio_dt_spec tempsens = GPIO_DT_SPEC_GET(TEMPSENS, gpios);
+
 int main(void) {
-    int errno;
+    int errnum;
 
     LOG_INIT();
     LOG_MODULE_DECLARE(main);
@@ -38,9 +42,18 @@ int main(void) {
 
     trutime_t time_provider = TRUTIME_INIT(time_provider, observer);
 
+    if (!gpio_is_ready_dt(&tempsens)) {
+        LOG_ERR("Cannot initialize the temperature sensor. GPIO %s:%d is "
+                "not ready", tempsens.port->name, tempsens.pin);
+    }
+    if ((errnum = gpio_pin_configure_dt(&tempsens, GPIO_INPUT)) != 0) {
+        LOG_ERR("Failed to configure %s:%d as input due to error %d",
+                tempsens.port->name, tempsens.pin, errnum);
+    }
+
     while (1) {
         struct tm ts;
-        if ((errno = trutime_get_utc(time_provider, &ts)) != 0) {
+        if ((errnum = trutime_get_utc(time_provider, &ts)) != 0) {
             LOG_ERR("Could not retrieve the time.\n");
         } else {
             printk("Time: %s", asctime(&ts));

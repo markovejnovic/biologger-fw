@@ -25,6 +25,12 @@
         status = "okay";
     };
 
+    zac_wire: zac_wire {
+        compatible = "zac-wire";
+        gpios = <&gpioa 4 GPIO_ACTIVE_LOW>;
+        status = "okay";
+    };
+
     leds: leds {
         compatible = "gpio-leds";
 

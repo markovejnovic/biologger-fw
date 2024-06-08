@@ -1,0 +1,1 @@
+add_subdirectory_ifdef(CONFIG_TSIC_506F tsic_506f)

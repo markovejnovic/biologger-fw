@@ -1,0 +1,9 @@
+# Copyright (c) 2024 Marko Vejnovic
+# SPDX-License-Identifier: Apache-2.0
+
+config TSIC_506F
+        bool "iST TSIC-506F Temperature Sensor"
+        default y
+        select GPIO
+        help
+          Enable driver for the iST TSic-506 Zac-Wire Temperature Sensor

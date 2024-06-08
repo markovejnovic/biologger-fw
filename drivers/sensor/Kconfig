@@ -1,0 +1,3 @@
+if SENSOR
+rsource "tsic_506f/Kconfig"
+endif # SENSOR
