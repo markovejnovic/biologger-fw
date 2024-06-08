@@ -32,6 +32,14 @@ void blink_status_runnable(void* p0, void* p1, void* p2) {
                 blink_period_ms = 200;
                 high_side_time_ms = 100;
                 break;
+            case OBSERVER_STATE_INITIALIZING:
+                blink_period_ms = 100;
+                high_side_time_ms = 50;
+                break;
+            case OBSERVER_STATE_WAITING_FOR_DISK:
+                blink_period_ms = 1000;
+                high_side_time_ms = 0;
+                break;
             case OBSERVER_STATE_OPERATING_NORMALLY:
                 blink_period_ms = 1000;
                 high_side_time_ms = 300;
@@ -52,7 +60,7 @@ void blink_status_runnable(void* p0, void* p1, void* p2) {
 }
 
 K_THREAD_STACK_DEFINE(work_thread_stack, THREAD_BLINK_STATUS0_STACK_SIZE);
-struct k_thread work_thread_data;
+static struct k_thread work_thread_data;
 
 observer_t observer_start(observer_t observer) {
     atomic_store_explicit(
@@ -90,4 +98,15 @@ void observer_set_state(observer_t observer, observer_state state) {
         state,
         memory_order_relaxed
     );
+}
+
+void observer_flag(observer_t o, enum observer_flag f, bool s) {
+    switch (f) {
+        case OBESRVER_FLAG_NO_DISK:
+            // TODO(markovejnovic): Rearchitect the observer.
+            observer_set_state(o, s
+                ? OBSERVER_STATE_WAITING_FOR_DISK
+                : OBSERVER_STATE_OPERATING_NORMALLY);
+            break;
+    }
 }

@@ -26,7 +26,7 @@ void gnss_data_callback(
     const struct gnss_data* data
 ) {
     int errno;
-    LOG_INF("Received GNSS timestamp: %d-%d-%d %d:%d:%d.%d.",
+    LOG_DBG("Received GNSS timestamp: %d-%d-%d %d:%d:%d.%d.",
             data->utc.century_year, data->utc.month, data->utc.month_day,
             data->utc.hour, data->utc.minute, data->utc.millisecond / 1000,
             data->utc.millisecond % 1000);

@@ -3,3 +3,5 @@
 typedef struct {
     struct timespec start_time_utc;
 } experiment;
+
+experiment experiment_begin();
