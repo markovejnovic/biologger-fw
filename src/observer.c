@@ -100,7 +100,7 @@ void observer_set_state(observer_t observer, observer_state state) {
     );
 }
 
-void observer_flag(observer_t o, enum observer_flag f, bool s) {
+static void observer_flag(observer_t o, enum observer_flag f, bool s) {
     switch (f) {
         case OBESRVER_FLAG_NO_DISK:
             // TODO(markovejnovic): Rearchitect the observer.
@@ -108,5 +108,18 @@ void observer_flag(observer_t o, enum observer_flag f, bool s) {
                 ? OBSERVER_STATE_WAITING_FOR_DISK
                 : OBSERVER_STATE_OPERATING_NORMALLY);
             break;
+        case OBSERVER_FLAG_NO_GPS_CLOCK:
+            observer_set_state(o, s
+                ? OBSERVER_STATE_INITIALIZING
+                : OBSERVER_STATE_OPERATING_NORMALLY);
+            break;
     }
+}
+
+void observer_flag_raise(observer_t o, enum observer_flag f) {
+    observer_flag(o, f, true);
+}
+
+void observer_flag_lower(observer_t o, enum observer_flag f) {
+    observer_flag(o, f, false);
 }

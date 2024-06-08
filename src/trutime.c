@@ -1,4 +1,7 @@
 #include "trutime.h"
+#include "memex.h"
+#include "observer.h"
+#include <stdbool.h>
 #include <string.h>
 #include <sys/errno.h>
 #include <time.h>
@@ -11,6 +14,7 @@
 #define DT_GNSS DT_NODELABEL(gnss)
 #define DT_GNSS_DISABLE DT_NODELABEL(gnss_disable)
 #define DT_RTC DT_ALIAS(trutime_clock)
+#define CURRENT_CENTURY_YEAR 2000
 
 LOG_MODULE_REGISTER(trutime);
 
@@ -18,31 +22,60 @@ static const struct device * const rtc_dev = DEVICE_DT_GET(DT_RTC);
 static const struct device * const gnss_dev = DEVICE_DT_GET(DT_GNSS);
 static const struct gpio_dt_spec gnss_disable =
     GPIO_DT_SPEC_GET(DT_GNSS_DISABLE, gpios);
-
+static observer_t observer = NULL;
 static bool synced_rtc_with_gps = false;
 
-void gnss_data_callback(
+static struct tm gnss_time_to_tm(const struct gnss_time* t) {
+    const int zero_indexed_mo = t->month - 1u;
+    const int year_relative_to_1900 =
+        t->century_year + CURRENT_CENTURY_YEAR - 1900;
+
+    struct tm time = {
+        .tm_sec = t->millisecond / 1000,
+        .tm_min = t->minute,
+        .tm_hour = t->hour,
+        .tm_mday = t->month_day,
+        .tm_mon = zero_indexed_mo,
+        .tm_year = year_relative_to_1900,
+        .tm_wday = -1,
+        .tm_yday = -1,
+        .tm_isdst = -1,
+    };
+    mktime(&time);
+    return time;
+}
+
+static void gnss_data_callback(
     const struct device* dev,
     const struct gnss_data* data
 ) {
+    if (observer == NULL) {
+        // App is not initialiezd, wait!
+        return;
+    }
+
+    if (data->info.fix_status != GNSS_FIX_STATUS_GNSS_FIX) {
+        // Don't do anything unless we have a fix -- we won't have data
+        // anyways.
+        return;
+    }
+
+
+    if (CMP_ALL((uint8_t*)&data->utc, sizeof(data->utc), 0)) {
+        // If all the timestamp values are 0, then there is no point in trying
+        // anything. We have no data.
+        return;
+    }
+
     int errno;
-    LOG_DBG("Received GNSS timestamp: %d-%d-%d %d:%d:%d.%d.",
+    LOG_INF("Received GNSS timestamp: %d-%d-%d %d:%d:%d.%d.",
             data->utc.century_year, data->utc.month, data->utc.month_day,
             data->utc.hour, data->utc.minute, data->utc.millisecond / 1000,
             data->utc.millisecond % 1000);
 
-    struct rtc_time time = {
-        .tm_hour = data->utc.hour,
-        .tm_isdst = 0,
-        .tm_mday = data->utc.month_day,
-        .tm_min = data->utc.minute,
-        .tm_mon = data->utc.month,
-        .tm_nsec = (data->utc.millisecond % 1000) * 1000000,
-        .tm_sec = data->utc.millisecond / 1000,
-        .tm_year = data->utc.century_year,
-    };
+    const struct tm time = gnss_time_to_tm(&data->utc);
 
-    if ((errno = rtc_set_time(rtc_dev, &time)) != 0) {
+    if ((errno = rtc_set_time(rtc_dev, (const struct rtc_time*)&time)) != 0) {
         LOG_ERR("Failed to update the RTC time. Error: %d", errno);
         return;
     }
@@ -51,14 +84,18 @@ void gnss_data_callback(
         LOG_ERR("Failed to disable the GNSS module. Error: %d", errno);
     }
 
-    synced_rtc_with_gps = true;
     LOG_INF("Aligned the RTC to GNSS.");
+    observer_flag_lower(observer, OBSERVER_FLAG_NO_GPS_CLOCK);
+    synced_rtc_with_gps = true;
 }
 
 GNSS_DATA_CALLBACK_DEFINE(gnss_dev, gnss_data_callback);
 
-trutime_t trutime_init(trutime_t trutime) {
+trutime_t trutime_init(trutime_t trutime, observer_t obs) {
     int errno;
+
+    observer = obs;
+    observer_flag_raise(observer, OBSERVER_FLAG_NO_GPS_CLOCK);
 
     if (!device_is_ready(rtc_dev)) {
         LOG_ERR("Cannot initialize trutime because the RTC device is not "

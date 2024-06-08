@@ -13,6 +13,7 @@ typedef enum {
 
 enum observer_flag {
     OBESRVER_FLAG_NO_DISK,
+    OBSERVER_FLAG_NO_GPS_CLOCK,
 };
 
 typedef struct {
@@ -30,6 +31,7 @@ void observer_set_state(observer_t, observer_state);
 #define OBSERVER_DECL(name) \
     observer_data observer_##name##_data;
 
-void observer_flag(observer_t, enum observer_flag, bool);
+void observer_flag_raise(observer_t, enum observer_flag);
+void observer_flag_lower(observer_t, enum observer_flag);
 
 #endif // OBSERVER_H

@@ -195,11 +195,13 @@ static void management_thread_runnable(void* p0, void* p1, void* p2) {
             switch (status) {
                 case BLOCK_DEVICE_STATUS_APPEARS_SENSIBLE:
                     LOG_DBG("It appears the disk is operating normally.");
-                    observer_flag(storage->observer, OBESRVER_FLAG_NO_DISK, 0);
+                    observer_flag_lower(storage->observer,
+                                        OBESRVER_FLAG_NO_DISK);
                     break;
                 case BLOCK_DEVICE_STATUS_NO_OR_BAD_DISK:
                     LOG_INF("It appears the disk is unavailable / corrupt.");
-                    observer_flag(storage->observer, OBESRVER_FLAG_NO_DISK, 1);
+                    observer_flag_raise(storage->observer,
+                                        OBESRVER_FLAG_NO_DISK);
 
                     // TODO(markovejnovic): Here would be a good spot to
                     // attempt to reinitialize the SD card, however there is no
@@ -208,7 +210,8 @@ static void management_thread_runnable(void* p0, void* p1, void* p2) {
                     break;
                 case BLOCK_DEVICE_STATUS_NO_SPACE_ON_DISK:
                     LOG_INF("It appears the disk is too small.");
-                    observer_flag(storage->observer, OBESRVER_FLAG_NO_DISK, 1);
+                    observer_flag_raise(storage->observer,
+                                        OBESRVER_FLAG_NO_DISK);
                     break;
                 case BLOCK_DEVICE_STATUS_NO_OR_CORRUPT_FAT:
                     LOG_INF("It appears the disk does not have a good FAT "
@@ -223,8 +226,8 @@ static void management_thread_runnable(void* p0, void* p1, void* p2) {
                                 storage->mount_point.mnt_point, errnum);
                         // Well we tried and failed, that doesn't look good --
                         // mark it as gonezo.
-                        observer_flag(storage->observer, OBESRVER_FLAG_NO_DISK,
-                                      1);
+                        observer_flag_raise(storage->observer,
+                                            OBESRVER_FLAG_NO_DISK);
                     } else {
                         // We mounted the disk! In order to avoid waiting for
                         // the next cycle, let's immediately re-run this
@@ -238,13 +241,15 @@ static void management_thread_runnable(void* p0, void* p1, void* p2) {
                     break;
                 case BLOCK_DEVICE_STATUS_NO_SPACE_ON_FAT:
                     LOG_INF("It appears the FAT partition is too small.");
-                    observer_flag(storage->observer, OBESRVER_FLAG_NO_DISK, 1);
+                    observer_flag_raise(storage->observer,
+                                        OBESRVER_FLAG_NO_DISK);
                     break;
                 default:
                     LOG_ERR("Received an unreasonable and unexpected value "
                             "from storage_get_status: %d", status);
                     // Not the user's fault -- let's not confuse them.
-                    observer_flag(storage->observer, OBESRVER_FLAG_NO_DISK, 0);
+                    observer_flag_lower(storage->observer,
+                                        OBESRVER_FLAG_NO_DISK);
                     break;
             }
         }

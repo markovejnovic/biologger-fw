@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 #include <sys/_timespec.h>
+#include <time.h>
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/logging/log_ctrl.h>
@@ -35,16 +36,14 @@ int main(void) {
     // experiment data.
     storage_t storage = storage_init(observer);
 
-    trutime_t time_provider = TRUTIME_INIT(time_provider);
+    trutime_t time_provider = TRUTIME_INIT(time_provider, observer);
 
     while (1) {
         struct tm ts;
         if ((errno = trutime_get_utc(time_provider, &ts)) != 0) {
             LOG_ERR("Could not retrieve the time.\n");
         } else {
-            printk("Time: %d-%d-%d %d:%d:%d\n",
-                    ts.tm_year, ts.tm_mon, ts.tm_mday,
-                    ts.tm_hour, ts.tm_min, ts.tm_sec);
+            printk("Time: %s", asctime(&ts));
         }
         k_msleep(1000);
     }
