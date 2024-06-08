@@ -25,6 +25,15 @@
         status = "okay";
     };
 
+    tsic_506: tsic_506 {
+        status = "okay";
+        compatible = "ist,tsic-xx6";
+        pwms = <&pwm2 1 PWM_USEC(5) PWM_POLARITY_NORMAL>;
+        data-bits = <11>;
+        lower-temperature-limit = <(-10)>;
+        higher-temperature-limit = <60>;
+    };
+
     leds: leds {
         compatible = "gpio-leds";
 
@@ -127,4 +136,14 @@
 	clocks = <&rcc STM32_CLOCK_BUS_APB1 0x10000000>,
 		 <&rcc STM32_SRC_LSE RTC_SEL(1)>;
 	status = "okay";
+};
+
+&timers2 {
+	status = "okay";
+
+	pwm2: pwm {
+		status = "okay";
+		pinctrl-0 = <&tim2_ch1_pa0>;
+		pinctrl-names = "default";
+	};
 };

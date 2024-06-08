@@ -14,14 +14,18 @@
 #include <zephyr/device.h>
 #include "trutime.h"
 #include "storage.h"
+#include "zephyr/drivers/sensor.h"
 
 LOG_MODULE_REGISTER(main);
 
 OBSERVER_DECL(main_observer);
 TRUTIME_DECL(time_provider);
 
+#define TSIC DT_NODELABEL(tsic_506)
+static const struct device* tsic_506 = DEVICE_DT_GET(TSIC);
+
 int main(void) {
-    int errno;
+    int errnum;
 
     LOG_INIT();
     LOG_MODULE_DECLARE(main);
@@ -38,13 +42,31 @@ int main(void) {
 
     trutime_t time_provider = TRUTIME_INIT(time_provider, observer);
 
+    if (!device_is_ready(tsic_506)) {
+        LOG_ERR("The TSIC506 does not appear to be ready.");
+    }
+
     while (1) {
         struct tm ts;
-        if ((errno = trutime_get_utc(time_provider, &ts)) != 0) {
-            LOG_ERR("Could not retrieve the time.\n");
+        if ((errnum = trutime_get_utc(time_provider, &ts)) != 0) {
+            LOG_ERR("Could not retrieve the time.");
         } else {
-            printk("Time: %s", asctime(&ts));
+            printk("Time: %s\n", asctime(&ts));
         }
+
+        if ((errnum = sensor_sample_fetch(tsic_506)) != 0) {
+            LOG_ERR("Failed to fetch the ambient temp: %d", errnum);
+        }
+
+        struct sensor_value sv;
+        if ((errnum = sensor_channel_get(tsic_506, SENSOR_CHAN_AMBIENT_TEMP, &sv)) != 0) {
+            LOG_ERR("Failed to measure the ambient temp: %d", errnum);
+        } else {
+            const double svf = sensor_value_to_double(&sv);
+            printk("Temperature: %f\n", svf);
+        }
+
+
         k_msleep(1000);
     }
 }
