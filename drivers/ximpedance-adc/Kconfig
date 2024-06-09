@@ -1,0 +1,6 @@
+config XIMPEDANCE_AMP
+        bool "XImpedanceAmp Module"
+        default y
+        depends on ADC && ADC_ADS1X1X
+        help
+          Enables The XImpedanceAmp module.
