@@ -1,5 +1,6 @@
 #include "storage.h"
 #include "thread_specs.h"
+#include "zephyr/usb/usbd.h"
 #include <stdint.h>
 #include <zephyr/kernel/thread.h>
 #include <ff.h>
@@ -11,6 +12,7 @@
 #include <zephyr/logging/log.h>
 #include <zephyr/storage/disk_access.h>
 #include <zephyr/sys/slist.h>
+#include "usb.h"
 
 #define MAX_PATH 256
 #define DISK_NAME "SD"
@@ -19,6 +21,8 @@
 #define SECTOR_MAX 2048
 
 LOG_MODULE_REGISTER(storage);
+
+struct usbd_contex* usb_device;
 
 struct storage {
     size_t open_objects;
@@ -289,10 +293,15 @@ storage_t storage_init(observer_t observer) {
         goto exit_fault;
     }
 
+    if ((errnum = usb_init(&usb_device)) != 0) {
+        LOG_ERR("Could not initialize the USB (%d)", errnum);
+        goto exit_fault;
+    }
+
     // This module shall start a management thread that will manage the
     // storage. We do not need this to be extremely zealous, just need to know
     // some basics on the device.
-    LOG_DBG("Beginning debug thread...");
+    LOG_DBG("Beginning SD card management thread...");
     k_thread_create(
         &management_thread_data,
         management_thread_stack,

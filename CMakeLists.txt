@@ -4,4 +4,4 @@ find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
 project(my_zephyr_app)
 
 target_sources(app PRIVATE src/main.c src/observer.c src/trutime.c
-                           src/storage.c)
+                           src/storage.c src/usb.c)
