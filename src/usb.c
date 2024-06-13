@@ -1,8 +1,18 @@
+#include "usb.h"
 #include <zephyr/logging/log.h>
 #include <zephyr/device.h>
 #include <zephyr/usb/usbd.h>
 
 LOG_MODULE_REGISTER(usb);
+
+// These flags are normally injected from Kconfig but
+// CONFIG_USB_DEVICE_STACK_NEXT and CONFIG_USB_DEVICE_STACK are currently
+// mutually exclusive. They are, therefore, explicitly specified here.
+#define CONFIG_USB_DEVICE_VID 0x1d50
+#define CONFIG_USB_DEVICE_PID 0x1
+#define CONFIG_USB_DEVICE_MANUFACTURER "DeRosa"
+#define CONFIG_USB_DEVICE_PRODUCT "FLoggy"
+#define CONFIG_USB_MAX_POWER 50  // * 10 mA
 
 USBD_DEVICE_DEFINE(usb_device, DEVICE_DT_GET(DT_NODELABEL(zephyr_udc0)),
                    CONFIG_USB_DEVICE_VID, CONFIG_USB_DEVICE_PID);
@@ -103,10 +113,10 @@ int usb_init(struct usbd_contex** pctx) {
         return err;
     }
 
-    const enum usbd_speed target_speed =
-        usbd_caps_speed(&usb_device) >= USBD_SPEED_HS
-            ? USBD_SPEED_HS
-            : USBD_SPEED_FS;
+    const enum usbd_speed target_speed = USBD_SPEED_FS;
+        //usbd_caps_speed(&usb_device) >= USBD_SPEED_HS
+        //    ? USBD_SPEED_HS
+        //    : USBD_SPEED_FS;
     if ((err = add_configuration(&usb_device, target_speed,
                                  target_speed == USBD_SPEED_HS
                                      ? &default_hs_config
@@ -115,13 +125,13 @@ int usb_init(struct usbd_contex** pctx) {
         return err;
     }
 
-    if ((err = usbd_device_set_bcd(&usb_device, target_speed, 0x0201)) != 0) {
+    if ((err = usbd_device_set_bcd(&usb_device, target_speed, 0x0200)) != 0) {
         LOG_ERR("Failed to add USB 2.0 extension descriptor.");
         return err;
     }
 
     if ((err = usbd_init(&usb_device)) != 0) {
-        LOG_ERR("Failed to initialize the USB.");
+        LOG_ERR("Failed to initialize the USB (%d).", err);
         return err;
     }
 

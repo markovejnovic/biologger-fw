@@ -1,6 +1,6 @@
 #include "storage.h"
 #include "thread_specs.h"
-#include "zephyr/usb/usbd.h"
+#include <zephyr/usb/usbd.h>
 #include <stdint.h>
 #include <zephyr/kernel/thread.h>
 #include <ff.h>
@@ -13,6 +13,8 @@
 #include <zephyr/storage/disk_access.h>
 #include <zephyr/sys/slist.h>
 #include "usb.h"
+#include <zephyr/usb/class/usbd_msc.h>
+#include <zephyr/usb/usb_device.h>
 
 #define MAX_PATH 256
 #define DISK_NAME "SD"
@@ -23,6 +25,7 @@
 LOG_MODULE_REGISTER(storage);
 
 struct usbd_contex* usb_device;
+USBD_DEFINE_MSC_LUN(SD, "Zephyr", DISK_NAME, "0.00");
 
 struct storage {
     size_t open_objects;
@@ -179,6 +182,10 @@ K_THREAD_STACK_DEFINE(management_thread_stack,
                       THREAD_BLOCK_STORAGE_MANAGEMENT_STACK_SIZE);
 static struct k_thread management_thread_data;
 
+// Cheap hack. Should be a separate module, but this architecture is all a bit
+// of a hack.
+static bool usb_enabled = false;
+
 static void management_thread_runnable(void* p0, void* p1, void* p2) {
     LOG_INF("Starting to manage storage...");
 
@@ -199,6 +206,16 @@ static void management_thread_runnable(void* p0, void* p1, void* p2) {
             switch (status) {
                 case BLOCK_DEVICE_STATUS_APPEARS_SENSIBLE:
                     LOG_DBG("It appears the disk is operating normally.");
+                    if (!usb_enabled) {
+                        if ((errnum = usb_enable(NULL)) != 0) {
+                            LOG_ERR("Could not initialize the USB (%d)",
+                                    errnum);
+                            usb_enabled = false;
+                        } else {
+                            LOG_INF("Initialized the USB module.");
+                            usb_enabled = true;
+                        }
+                    }
                     observer_flag_lower(storage->observer,
                                         OBESRVER_FLAG_NO_DISK);
                     break;
@@ -290,11 +307,6 @@ storage_t storage_init(observer_t observer) {
 
     if ((errnum = disk_access_init(DISK_NAME)) != 0) {
         LOG_ERR("Cannot open a handle to the SDMMC device. Error: %d", errnum);
-        goto exit_fault;
-    }
-
-    if ((errnum = usb_init(&usb_device)) != 0) {
-        LOG_ERR("Could not initialize the USB (%d)", errnum);
         goto exit_fault;
     }
 
