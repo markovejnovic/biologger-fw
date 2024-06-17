@@ -1,4 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
+# Specifies which features this board depends on. You likely don't need to edit
+# it.
 
 CONFIG_BOARD_OTHER_BIOLOGGER=y
 

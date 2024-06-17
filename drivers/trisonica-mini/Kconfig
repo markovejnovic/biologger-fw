@@ -1,0 +1,6 @@
+config TRISONICA_MINI_DRIVER
+        bool "Trisonica Mini Driver"
+        default y
+        depends on SERIAL
+        help
+          Enables the Trisonica Mini Driver.

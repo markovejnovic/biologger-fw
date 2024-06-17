@@ -1,4 +1,3 @@
-board_runner_args(jlink "--device=nRF52840_xxAA" "--speed=4000")
-board_runner_args(pyocd "--target=nrf52840" "--frequency=4000000")
-include(${ZEPHYR_BASE}/boards/common/jlink.board.cmake)
-include(${ZEPHYR_BASE}/boards/common/pyocd.board.cmake)
+# This cmake file tells Zephyr how to flash/debug this board. You likely don't
+# need to edit it.
+# TODO(markovejnovic): Actually write this file.

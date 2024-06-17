@@ -1,3 +1,7 @@
+# This file tells Zephyr what feature flags this board supports.
+# https://martinfowler.com/articles/feature-toggles.html
+# You likely do not need to edit this for basic functionality.
+
 if BOARD_OTHER_BIOLOGGER
 
 endif # BOARD_OTHER_BIOLOGGER

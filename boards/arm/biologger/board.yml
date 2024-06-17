@@ -1,3 +1,5 @@
+# This .yml file tells zephyr that there exists a board called "biologger".
+# You likely do not need to edit it for basic work.
 board:
   name: biologger
   vendor: other

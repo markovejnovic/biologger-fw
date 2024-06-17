@@ -1,3 +1,6 @@
+# This .yml file tells zephyr that there exists a board called "biologger" and
+# it specifies some helpful information for generating documentation.
+# You do not need to edit it for basic work.
 identifier: biologger
 name: BioLogger
 type: mcu
