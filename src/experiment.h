@@ -65,14 +65,15 @@ struct experiment {
 };
 
 struct experiment_caption {
-    sys_snode_t node;
     char* column_name;
     char* unit;
+    sys_snode_t node;
 };
 
 struct experiment_row {
-    sys_snode_t node;
     double values[MAX_EXPERIMENT_COLS];
+    size_t value_count;
+    sys_snode_t node;
 };
 
 /**

@@ -36,6 +36,13 @@ trutime_t trutime_init(struct trutime_data* t, observer_t o);
 int trutime_get_utc(trutime_t t, struct tm* time);
 
 /**
+ * @brief Query whether the UTC synchronized time is available.
+ * @param [in] t The trutime object.
+ * @return Whether trutime is currently synchronized and available.
+ */
+bool trutime_is_available(trutime_t t);
+
+/**
  * @brief Declare a trutime object.
  * @param [in] name The name of the trutime object.
  */

@@ -1,20 +1,22 @@
+#include "observer.h"
 #include "storage.h"
 #include "thread_specs.h"
-#include <zephyr/usb/usbd.h>
-#include <stdint.h>
-#include <zephyr/kernel/thread.h>
+#include "zephyr/fs/fs_interface.h"
 #include <ff.h>
+#include <stdint.h>
 #include <sys/errno.h>
+#include <time.h>
 #include <zephyr/drivers/disk.h>
 #include <zephyr/fs/fs.h>
 #include <zephyr/kernel.h>
+#include <zephyr/kernel/thread.h>
 #include <zephyr/kernel/thread_stack.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/storage/disk_access.h>
 #include <zephyr/sys/slist.h>
-#include "usb.h"
 #include <zephyr/usb/class/usbd_msc.h>
 #include <zephyr/usb/usb_device.h>
+#include <zephyr/usb/usbd.h>
 
 #define MAX_PATH 256
 #define DISK_NAME "SD"
@@ -31,7 +33,9 @@ struct storage {
     size_t open_objects;
     const char* disk_name;
     struct fs_mount_t mount_point;
+
     FATFS fat_fs;
+    struct fs_file_t file;
 
     observer_t observer;
 
@@ -146,36 +150,18 @@ int storage_close(storage_t storage) {
         return 0;
     }
 
+    int err = 0;
+
+    if ((err = storage_close_file(storage)) != 0) {
+        LOG_ERR("Could not close the open file (%d).", err);
+    }
+
     if (storage->open_objects != 0) {
         return -EMFILE;
     }
 
     k_free(storage);
-    return 0;
-}
-
-stored_experiment_t storage_stored_experiment_new(storage_t storage) {
-    if (storage == NULL) {
-        return NULL;
-    }
-
-    storage->open_objects++;
-
-    stored_experiment_t experiment = k_malloc(sizeof(struct experiment));
-    experiment->storage = storage;
-
-    return experiment;
-}
-
-int storage_stored_experiment_close(stored_experiment_t experiment) {
-    if (experiment == NULL) {
-        return 0;
-    }
-    
-    experiment->storage--;
-
-    k_free(experiment);
-    return 0;
+    return err;
 }
 
 K_THREAD_STACK_DEFINE(management_thread_stack,
@@ -217,12 +203,12 @@ static void management_thread_runnable(void* p0, void* p1, void* p2) {
                         }
                     }
                     observer_flag_lower(storage->observer,
-                                        OBESRVER_FLAG_NO_DISK);
+                                        OBSERVER_FLAG_NO_DISK);
                     break;
                 case BLOCK_DEVICE_STATUS_NO_OR_BAD_DISK:
                     LOG_INF("It appears the disk is unavailable / corrupt.");
                     observer_flag_raise(storage->observer,
-                                        OBESRVER_FLAG_NO_DISK);
+                                        OBSERVER_FLAG_NO_DISK);
 
                     // TODO(markovejnovic): Here would be a good spot to
                     // attempt to reinitialize the SD card, however there is no
@@ -232,7 +218,7 @@ static void management_thread_runnable(void* p0, void* p1, void* p2) {
                 case BLOCK_DEVICE_STATUS_NO_SPACE_ON_DISK:
                     LOG_INF("It appears the disk is too small.");
                     observer_flag_raise(storage->observer,
-                                        OBESRVER_FLAG_NO_DISK);
+                                        OBSERVER_FLAG_NO_DISK);
                     break;
                 case BLOCK_DEVICE_STATUS_NO_OR_CORRUPT_FAT:
                     LOG_INF("It appears the disk does not have a good FAT "
@@ -248,7 +234,7 @@ static void management_thread_runnable(void* p0, void* p1, void* p2) {
                         // Well we tried and failed, that doesn't look good --
                         // mark it as gonezo.
                         observer_flag_raise(storage->observer,
-                                            OBESRVER_FLAG_NO_DISK);
+                                            OBSERVER_FLAG_NO_DISK);
                     } else {
                         // We mounted the disk! In order to avoid waiting for
                         // the next cycle, let's immediately re-run this
@@ -263,14 +249,14 @@ static void management_thread_runnable(void* p0, void* p1, void* p2) {
                 case BLOCK_DEVICE_STATUS_NO_SPACE_ON_FAT:
                     LOG_INF("It appears the FAT partition is too small.");
                     observer_flag_raise(storage->observer,
-                                        OBESRVER_FLAG_NO_DISK);
+                                        OBSERVER_FLAG_NO_DISK);
                     break;
                 default:
                     LOG_ERR("Received an unreasonable and unexpected value "
                             "from storage_get_status: %d", status);
                     // Not the user's fault -- let's not confuse them.
                     observer_flag_lower(storage->observer,
-                                        OBESRVER_FLAG_NO_DISK);
+                                        OBSERVER_FLAG_NO_DISK);
                     break;
             }
         }
@@ -303,6 +289,8 @@ storage_t storage_init(observer_t observer) {
         },
     };
 
+    fs_file_t_init(&storage->file);
+
     int errnum;
 
     if ((errnum = disk_access_init(DISK_NAME)) != 0) {
@@ -329,3 +317,23 @@ exit_fault:
     return NULL;
 }
 
+int storage_open_file(storage_t storage, struct tm *start_time) {
+    int err;
+
+    char path_buf[MAX_PATH];
+    strftime(path_buf, MAX_PATH, "%FT%H:%M:%S", start_time);
+
+    if ((err = fs_open(&storage->file, path_buf, FS_O_CREATE)) != 0) {
+        LOG_ERR("Failed to create a new file %s (%d).", path_buf, err);
+    }
+
+    return err;
+}
+
+int storage_write_row(storage_t storage, const char *row, size_t row_sz) {
+    return fs_write(&storage->file, row, row_sz);
+}
+
+int storage_close_file(storage_t storage) {
+    return fs_close(&storage->file);
+}

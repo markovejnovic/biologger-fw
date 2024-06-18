@@ -1,6 +1,5 @@
 #include "observer.h"
 #include "thread_specs.h"
-#include <stdatomic.h>
 #include <stdbool.h>
 #include <zephyr/kernel.h>
 #include <zephyr/device.h>
@@ -10,44 +9,48 @@
 LOG_MODULE_REGISTER(observer, CONFIG_LOG_DEFAULT_LEVEL);
 
 #define STATUS_LED DT_NODELABEL(status_led)
-#if !DT_NODE_HAS_STATUS(STATUS_LED, okay)
-#error "Unsupported board: led0 devicetree alias is not defined"
-#endif
 
 static const struct gpio_dt_spec status_led =
     GPIO_DT_SPEC_GET_OR(STATUS_LED, gpios, {0});
 
-void blink_status_runnable(void* p0, void* p1, void* p2) {
+static void observer_flag(observer_t o, enum observer_flag f, bool s) {
+    o->flag_states[f] = s;
+
+    o->app_state =
+        o->flag_states[OBSERVER_FLAG_NO_DISK]
+        || o->flag_states[OBSERVER_FLAG_DRIVER_MIA]
+            ? APP_STATE_DEVICE_FAULT :
+        o->flag_states[OBSERVER_FLAG_NO_GPS_CLOCK]
+            ? APP_STATE_WAITING_FOR_TIMESYNC :
+        APP_STATE_SAMPLING;
+}
+
+static void blink_status_runnable(void* p0, void* p1, void* p2) {
     observer_t observer = (observer_t)p0;
 
+    // Repeatedly we will blink the LED as part of the LED thread.
     while (true) {
-        observer_state current_state = atomic_load_explicit(
-            &observer->current_state, memory_order_relaxed
-        );
-
         uint16_t blink_period_ms = 1000;
         uint16_t high_side_time_ms = 100;
-        switch (current_state) {
-            case OBSERVER_STATE_FAIL_INIT:
-                blink_period_ms = 200;
-                high_side_time_ms = 100;
+
+        switch (observer->app_state) {
+            case APP_STATE_SAMPLING:
+                blink_period_ms = 500;
+                high_side_time_ms = 200;
                 break;
-            case OBSERVER_STATE_INITIALIZING:
-                blink_period_ms = 100;
-                high_side_time_ms = 50;
+
+            case APP_STATE_WAITING_FOR_TIMESYNC:
+                blink_period_ms = 1500;
+                high_side_time_ms = 500;
                 break;
-            case OBSERVER_STATE_WAITING_FOR_DISK:
+
+            case APP_STATE_DEVICE_FAULT:
                 blink_period_ms = 1000;
-                high_side_time_ms = 0;
-                break;
-            case OBSERVER_STATE_OPERATING_NORMALLY:
-                blink_period_ms = 1000;
-                high_side_time_ms = 300;
+                high_side_time_ms = 1000;
                 break;
         }
 
-        const uint16_t low_side_time_ms = blink_period_ms- high_side_time_ms;
-
+        const uint16_t low_side_time_ms = blink_period_ms - high_side_time_ms;
 
         if (!gpio_pin_get_dt(&status_led)) {
             gpio_pin_set_dt(&status_led, 1);
@@ -63,11 +66,11 @@ K_THREAD_STACK_DEFINE(work_thread_stack, THREAD_BLINK_STATUS0_STACK_SIZE);
 static struct k_thread work_thread_data;
 
 observer_t observer_start(observer_t observer) {
-    atomic_store_explicit(
-        &observer->current_state,
-        OBSERVER_STATE_OPERATING_NORMALLY,
-        memory_order_relaxed
-    );
+    observer->app_state = APP_STATE_DEVICE_FAULT;
+
+    for (int i = 0; i < OBSERVER_FLAG_COUNT; i++) {
+        observer_flag(observer, i, false);
+    }
 
     if (!gpio_is_ready_dt(&status_led)) {
         LOG_ERR("Status LED @ %s:%d is not ready. Failing to initialize.",
@@ -90,30 +93,6 @@ observer_t observer_start(observer_t observer) {
     );
 
     return observer;
-}
-
-void observer_set_state(observer_t observer, observer_state state) {
-    atomic_store_explicit(
-        &observer->current_state,
-        state,
-        memory_order_relaxed
-    );
-}
-
-static void observer_flag(observer_t o, enum observer_flag f, bool s) {
-    switch (f) {
-        case OBESRVER_FLAG_NO_DISK:
-            // TODO(markovejnovic): Rearchitect the observer.
-            observer_set_state(o, s
-                ? OBSERVER_STATE_WAITING_FOR_DISK
-                : OBSERVER_STATE_OPERATING_NORMALLY);
-            break;
-        case OBSERVER_FLAG_NO_GPS_CLOCK:
-            observer_set_state(o, s
-                ? OBSERVER_STATE_INITIALIZING
-                : OBSERVER_STATE_OPERATING_NORMALLY);
-            break;
-    }
 }
 
 void observer_flag_raise(observer_t o, enum observer_flag f) {

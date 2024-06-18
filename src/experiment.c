@@ -1,12 +1,11 @@
 #include "experiment.h"
 #include "storage.h"
-#include "zephyr/sys/printk.h"
-#include "zephyr/sys/util.h"
 #include <stdlib.h>
 #include <string.h>
 #include <sys/errno.h>
-#include <zephyr/sys/slist.h>
 #include <zephyr/logging/log.h>
+#include <zephyr/sys/printk.h>
+#include <zephyr/sys/slist.h>
 
 #define EXPERIMENT_AUTO_FLUSH_THRESHOLD (10)
 
@@ -19,7 +18,7 @@
 
 static char row_str_buf[MAX_ROW_STR_LEN];
 
-LOG_MODULE_DECLARE(experiment);
+LOG_MODULE_REGISTER(experiment);
 
 static void free_caption(struct experiment_caption* capt) {
     free(capt->column_name);
@@ -47,7 +46,11 @@ static void free_columns(struct experiment* exp) {
 /**
  * @brief Format the row of an experiment into CSV form.
  */
-static char* format_row(char* buf, struct experiment_row* exp) {
+static char* format_row(
+    char* buf,
+    struct experiment_row* exp,
+    size_t* str_len
+) {
     char* write_buf = buf;
     for (size_t i = 0; i < MAX_EXPERIMENT_COLS; i++) {
         const double value = exp->values[i];
@@ -55,6 +58,8 @@ static char* format_row(char* buf, struct experiment_row* exp) {
     }
 
     *(--write_buf) = 0;
+
+    *str_len = (write_buf - buf);
 
     return buf;
 }
@@ -66,6 +71,7 @@ static char* format_row(char* buf, struct experiment_row* exp) {
  * a ton of malloc that looks pretty scary.
  */
 static void flush_columns(struct experiment* experiment) {
+    int err;
 // The buffer size is large enough to match the whole column name, the units,
 // the 4 characters " [],". The format is "%s [%s],..." hence the 4 extra
 // characters.
@@ -88,7 +94,11 @@ static void flush_columns(struct experiment* experiment) {
     // string.
     *(--work_ptr) = 0;
 
-    storage_write_row(experiment->storage, column_str);
+    const size_t str_len = work_ptr - column_str;
+    if ((err = storage_write_row(experiment->storage, column_str,
+                                 str_len)) != 0) {
+        LOG_ERR("Failed to write to storage (%d)", err);
+    }
     free(column_str);
 
 #undef MAX_COL_STR_LEN
@@ -153,7 +163,9 @@ int experiment_add_column(
 
 struct experiment_row* experiment_row_new(void) {
     // Allocate values for the row.
-    return malloc(sizeof(struct experiment_row));
+    struct experiment_row* row = malloc(sizeof(struct experiment_row));
+    row->value_count = 0;
+    return row;
 }
 
 int experiment_push_row(
@@ -185,10 +197,12 @@ int experiment_flush(struct experiment* experiment) {
     // Write every single experiment into the storage.
     struct experiment_row * entry, * next;
     SYS_SLIST_FOR_EACH_CONTAINER_SAFE(&experiment->rows, entry, next, node) {
-        const char* const row_str = format_row(row_str_buf, entry);
+        size_t str_len;
+        const char* const row_str = format_row(row_str_buf, entry, &str_len);
 
         // Attempt to write this to persistent storage.
-        if ((err = storage_write_row(experiment->storage, row_str)) != 0) {
+        if ((err = storage_write_row(experiment->storage, row_str,
+                                     str_len)) != 0) {
             LOG_ERR("Failed to push the experiment row.");
             err++;
         }
@@ -202,4 +216,9 @@ int experiment_flush(struct experiment* experiment) {
     }
 
     return err;
+}
+
+int experiment_row_add_value(struct experiment_row *row, double value) {
+    row->values[row->value_count++] = value;
+    return 0;
 }

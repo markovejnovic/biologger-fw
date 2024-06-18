@@ -1,6 +1,7 @@
 #include "trutime.h"
 #include "memex.h"
 #include "observer.h"
+#include <stdatomic.h>
 #include <stdbool.h>
 #include <string.h>
 #include <sys/errno.h>
@@ -23,7 +24,7 @@ static const struct device * const gnss_dev = DEVICE_DT_GET(DT_GNSS);
 static const struct gpio_dt_spec gnss_disable =
     GPIO_DT_SPEC_GET(DT_GNSS_DISABLE, gpios);
 static observer_t observer = NULL;
-static bool synced_rtc_with_gps = false;
+static _Atomic bool synced_rtc_with_gps = false;
 
 static struct tm gnss_time_to_tm(const struct gnss_time* t) {
     const int zero_indexed_mo = t->month - 1u;
@@ -86,7 +87,7 @@ static void gnss_data_callback(
 
     LOG_INF("Aligned the RTC to GNSS.");
     observer_flag_lower(observer, OBSERVER_FLAG_NO_GPS_CLOCK);
-    synced_rtc_with_gps = true;
+    atomic_store_explicit(&synced_rtc_with_gps, true, memory_order_relaxed);
 }
 
 GNSS_DATA_CALLBACK_DEFINE(gnss_dev, gnss_data_callback);
@@ -132,7 +133,7 @@ trutime_t trutime_init(trutime_t trutime, observer_t obs) {
 int trutime_get_utc(trutime_t trutime, struct tm* out) {
     int errno;
 
-    if (!synced_rtc_with_gps) {
+    if (!atomic_load_explicit(&synced_rtc_with_gps, memory_order_relaxed)) {
         return -ENODATA;
     }
 
@@ -145,4 +146,10 @@ int trutime_get_utc(trutime_t trutime, struct tm* out) {
     struct tm *tm_time = rtc_time_to_tm(&rtctime);
     memcpy(out, tm_time, sizeof(struct tm));
     return 0;
+}
+
+bool trutime_is_available(trutime_t t) {
+    (void)t;
+
+    return atomic_load_explicit(&synced_rtc_with_gps, memory_order_relaxed);
 }
