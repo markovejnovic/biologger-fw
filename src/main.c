@@ -107,10 +107,15 @@ int main(void) {
     }
 
     // Wait until trutime is available. Sometimes this takes quite some time.
-    do { k_msleep(1000); } while (!trutime_is_available(time_provider));
+    do {
+        LOG_INF("Waiting for trutime support.");
+        k_msleep(1000);
+    } while (!trutime_is_available(time_provider));
+    k_msleep(1000); // TODO(markovejnovic): trutime_is_available leaks before
+                    // it is actually available.
 
     // Initialize the experiment 
-    struct experiment* experiment = experiment_init(storage);
+    struct experiment* experiment = experiment_init(storage, time_provider);
 
     // Populate the experiment with all the required columns.
     declare_columns(experiment);
@@ -126,18 +131,30 @@ int main(void) {
             LOG_DBG("Time: %s\n", asctime(&ts));
         }
 
+        storage_write_row(storage, "example", 7);
+
         // We are creating a new time sample -- create a new row.
-        struct experiment_row* row = experiment_row_new();
+        //struct experiment_row* row = experiment_row_new();
 
         // Collect the specified data into the experiment.
-        collect_data_10hz(row, &ts);
+        //collect_data_10hz(row, &ts);
 
         // Push these values into the experiment.
-        if ((err = experiment_push_row(experiment, row)) != 0) {
-            LOG_ERR("Failed to push a row into the experiment (%d)", err);
-        }
+        //if ((err = experiment_push_row(experiment, row)) != 0) {
+        //    LOG_ERR("Failed to push a row into the experiment (%d)", err);
+        //}
 
-        const uint32_t stop = k_uptime_get_32();;
-        k_msleep(SAMPLING_PERIOD_MS - (stop - start));
+        const uint32_t stop = k_uptime_get_32();
+        int64_t sleep_period;
+        const bool sleep_will_underflow = __builtin_sub_overflow(
+            (int64_t)stop,
+            (int64_t)start,
+            &sleep_period
+        );
+        if (sleep_will_underflow) {
+            LOG_ERR("Critically slow application causing sampling lag.");
+        } else {
+            k_msleep(SAMPLING_PERIOD_MS - (sleep_period));
+        }
     }
 }

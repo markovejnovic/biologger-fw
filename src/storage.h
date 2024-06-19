@@ -37,12 +37,16 @@ storage_t storage_init(observer_t observer);
 int storage_close(storage_t);
 
 /**
- * @brief Open a new file into which experiment logs will be stored.
+ * @brief Create a new transaction into permanent storage. Transactions are
+ *        units of operating between which a flush to disk will occur.
+ *
  * @param [in] storage The storage module.
  * @param [in] start_time The time when the experiment was started.
  * @return An error code if any.
+ *
+ * @warning storage_wait_until_available must pass before this can be called.
  */
-int storage_open_file(storage_t storage, struct tm* start_time);
+int storage_transaction(storage_t storage, const struct tm* start_time);
 
 /**
  * @brief Write a row to the currently open file.
@@ -51,6 +55,8 @@ int storage_open_file(storage_t storage, struct tm* start_time);
  * @param [in] row_sz The number of bytes in the row.
  * @note You should not have a trailing newline.
  * @return An error code if any.
+ *
+ * @warning storage_wait_until_available must pass before this can be called.
  */
 int storage_write_row(storage_t storage, const char* row, size_t row_sz);
 
@@ -60,7 +66,21 @@ int storage_write_row(storage_t storage, const char* row, size_t row_sz);
  *
  * @note You do not normally need to call this as storage_close will call it
  *       for you.
+ *
+ * @warning storage_wait_until_available must pass before this can be called.
  */
 int storage_close_file(storage_t storage);
+
+/**
+ * @brief Sleep the current thread of execution until storage is available.
+ * @param [in] storage The storage module.
+ */
+void storage_wait_until_available(storage_t storage);
+
+/**
+ * @brief Flush any cached state to disk.
+ * @param [in] storage The storage module.
+ */
+int storage_flush(storage_t storage);
 
 #endif // STORAGE_H

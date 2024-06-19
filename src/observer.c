@@ -40,7 +40,7 @@ static void blink_status_runnable(void* p0, void* p1, void* p2) {
                 break;
 
             case APP_STATE_WAITING_FOR_TIMESYNC:
-                blink_period_ms = 1500;
+                blink_period_ms = 3000;
                 high_side_time_ms = 500;
                 break;
 

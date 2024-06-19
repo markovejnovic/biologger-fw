@@ -1,6 +1,6 @@
-#include "trutime.h"
 #include "memex.h"
 #include "observer.h"
+#include "trutime.h"
 #include <stdatomic.h>
 #include <stdbool.h>
 #include <string.h>
@@ -8,9 +8,15 @@
 #include <time.h>
 #include <zephyr/device.h>
 #include <zephyr/drivers/gnss.h>
+#include <zephyr/drivers/gpio.h>
 #include <zephyr/drivers/rtc.h>
 #include <zephyr/logging/log.h>
-#include <zephyr/drivers/gpio.h>
+
+#define CONFIG_TRUTIME_MOCK_GNSS
+#ifdef CONFIG_TRUTIME_MOCK_GNSS
+#warning You are currently' using trutime without actual GNSS support. This \
+will result in incorrect time information.
+#endif
 
 #define DT_GNSS DT_NODELABEL(gnss)
 #define DT_GNSS_DISABLE DT_NODELABEL(gnss_disable)
@@ -125,6 +131,19 @@ trutime_t trutime_init(trutime_t trutime, observer_t obs) {
     if ((errno = gpio_pin_set_dt(&gnss_disable, 0)) != 0) {
         LOG_ERR("Couldn't enable the GNSS module.");
     }
+
+    // If we are mocking the time due to the absense of a GNSS chip let's set
+    // some fake value.
+#ifdef CONFIG_TRUTIME_MOCK_GNSS
+    struct tm fake_time;
+    fake_time.tm_year = 2023 - 1900;
+    fake_time.tm_mon = 8;
+    fake_time.tm_mday = 9;
+    mktime(&fake_time);
+    rtc_set_time(rtc_dev, (struct rtc_time*)&fake_time);
+    atomic_store_explicit(&synced_rtc_with_gps, true, memory_order_relaxed);
+    observer_flag_lower(observer, OBSERVER_FLAG_NO_GPS_CLOCK);
+#endif
 
     LOG_INF("Initialized trutime.");
     return trutime;

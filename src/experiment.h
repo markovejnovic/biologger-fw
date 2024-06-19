@@ -30,6 +30,7 @@
 #ifndef EXPERIMENT_H
 #define EXPERIMENT_H
 
+#include "trutime.h"
 #include <zephyr/sys/slist.h>
 #include <time.h>
 
@@ -62,6 +63,7 @@ struct experiment {
     size_t rows_count; /*!< The total number of rows. */
 
     storage_t storage; /*!< A reference to the application storage. */
+    trutime_t trutime; /*!< A reference to the application clock provider. */
 };
 
 struct experiment_caption {
@@ -80,9 +82,10 @@ struct experiment_row {
  * Initialize and heap allocate a new experiment object.
  *
  * @param [in] storage A storage.h object to write data into.
- * @param [in] time A 
+ * @param [in] trutime The trutime.h object to use as the experiment collection
+ *                     point.
  */
-struct experiment* experiment_init(storage_t storage);
+struct experiment* experiment_init(storage_t storage, trutime_t trutime);
 
 void experiment_free(struct experiment*);
 

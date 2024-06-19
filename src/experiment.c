@@ -1,5 +1,6 @@
 #include "experiment.h"
 #include "storage.h"
+#include "trutime.h"
 #include <stdlib.h>
 #include <string.h>
 #include <sys/errno.h>
@@ -105,7 +106,7 @@ static void flush_columns(struct experiment* experiment) {
 #undef MAX_TOTAL_COL_STR_LEN
 }
 
-struct experiment* experiment_init(storage_t storage) {
+struct experiment* experiment_init(storage_t storage, trutime_t trutime) {
     struct experiment* exp = malloc(sizeof(struct experiment));
     if (exp == NULL) {
         return NULL;
@@ -119,15 +120,24 @@ struct experiment* experiment_init(storage_t storage) {
     exp->rows_count = 0;
 
     exp->storage = storage;
+    exp->trutime = trutime;
+
+    // We need to open the required file.
+    storage_wait_until_available(storage);
+
+    // Seed the start time of the experiment.
+    int err;
+    struct tm time;
+    if ((err = trutime_get_utc(trutime, &time)) != 0) {
+        LOG_ERR("Could not fetch the true time to init the experiment (%d).",
+                err);
+    }
+    storage_transaction(storage, &time);
 
     return exp;
 }
 
 void experiment_free(struct experiment * exp) {
-    if (exp == NULL) {
-        return;
-    }
-
     experiment_flush(exp);
     free_columns(exp);
 
