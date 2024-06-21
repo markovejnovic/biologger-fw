@@ -2,6 +2,12 @@
  * Copyright (c) 2024 Marko Vejnovic
  *
  * SPDX-License-Identifier: Apache-2.0
+ *
+ * @detail
+ * Hello! This module is the main entrypoint of the biologger firmware. It is
+ * in this file that you should most likely attempt to perform your work. If
+ * you are only attempting to add new columns/rows, please have a look at
+ * declare_columns and collect_data_10hz.
  */
 #include <sys/_timespec.h>
 #include <zephyr/kernel.h>
@@ -53,7 +59,6 @@ static int init_drivers() {
         LOG_ERR("Failed to init ADC sequence. Error = %d", err);
     }
 
-
     return err;
 }
 
@@ -63,7 +68,8 @@ static int init_drivers() {
  * This function must only contain calls to experiment_add_column.
  */
 static void declare_columns(struct experiment* e) {
-    experiment_add_column(e, "Clock Seconds", "s");
+    //                           Column Name     Units
+    experiment_add_column(e,     "Example",      "");
 }
 
 /**
@@ -74,8 +80,9 @@ static void declare_columns(struct experiment* e) {
  * @warning There must be as many calls to experiment_row_add_value as there
  *          are to experiment_add_column in declare_columns.
  */
-static void collect_data_10hz(struct experiment_row* experiment_row) {
-    experiment_row_add_value(experiment_row, 42.0);
+static void collect_data_10hz(struct experiment_row* r) {
+    //                          The value to commit
+    experiment_row_add_value(r, 42.0);
 }
 
 int main(void) {
