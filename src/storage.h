@@ -19,6 +19,7 @@
 #include <time.h>
 #include <zephyr/sys/slist.h>
 #include "observer.h"
+#include "str.h"
 
 typedef struct experiment* experiment_t;
 typedef struct experiment_row* experiment_row_t;
@@ -52,13 +53,12 @@ int storage_transaction(storage_t storage, const struct tm* start_time);
  * @brief Write a row to the currently open file.
  * @param [in] storage The storage module.
  * @param [in] row The row to write.
- * @param [in] row_sz The number of bytes in the row.
  * @note You should not have a trailing newline.
  * @return An error code if any.
  *
  * @warning storage_wait_until_available must pass before this can be called.
  */
-int storage_write_row(storage_t storage, const char* row, size_t row_sz);
+int storage_write_row(storage_t storage, const struct strv row);
 
 /**
  * @brief Close the currently open file.

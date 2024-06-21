@@ -32,7 +32,6 @@
 
 #include "trutime.h"
 #include <zephyr/sys/slist.h>
-#include <time.h>
 
 #define MAX_EXPERIMENT_COLS (128)
 
@@ -53,7 +52,7 @@ typedef struct storage* storage_t;
  * added with experiment_push_row.
  */
 struct experiment {
-    struct tm start_time_utc; /*!< The experiment start time. */
+    struct rtc_time start_time_utc; /*!< The experiment start time. */
 
     sys_slist_t columns; /*!< The columns linked list. */
     size_t column_count; /*!< The total number of columns */
@@ -76,6 +75,7 @@ struct experiment_row {
     double values[MAX_EXPERIMENT_COLS];
     size_t value_count;
     sys_snode_t node;
+    unsigned long long millis_since_start;
 };
 
 /**
@@ -105,8 +105,12 @@ int experiment_add_column(struct experiment* experiment,
 
 /**
  * @brief Create a new heap-allocated experiment row.
+ * @param [in] millis_since_start The total count of milliseconds since the
+ *                                experiment was started.
  */
-struct experiment_row* experiment_row_new(void);
+struct experiment_row* experiment_row_new(
+    unsigned long long millis_since_start
+);
 
 /**
  * @brief Append a new value to the experiment.
@@ -142,5 +146,10 @@ int experiment_push_row(struct experiment* experiment,
  * @param [in] The exeperiment to flush.
  */
 int experiment_flush(struct experiment* experiment);
+
+/**
+ * @brief Retrieve the start time of the experiment.
+ */
+struct rtc_time* experiment_start_time(struct experiment* experiment);
 
 #endif /* EXPERIMENT_H */

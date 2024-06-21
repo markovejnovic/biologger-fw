@@ -4,7 +4,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 #include <sys/_timespec.h>
-#include <time.h>
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/logging/log_ctrl.h>
@@ -75,11 +74,8 @@ static void declare_columns(struct experiment* e) {
  * @warning There must be as many calls to experiment_row_add_value as there
  *          are to experiment_add_column in declare_columns.
  */
-static void collect_data_10hz(
-    struct experiment_row* experiment_row,
-    struct tm* time
-) {
-    experiment_row_add_value(experiment_row, time->tm_sec);
+static void collect_data_10hz(struct experiment_row* experiment_row) {
+    experiment_row_add_value(experiment_row, 42.0);
 }
 
 int main(void) {
@@ -121,30 +117,25 @@ int main(void) {
     declare_columns(experiment);
 
     while (1) {
-        const uint32_t start = k_uptime_get_32();
-
-        // Collect the current time.
-        struct tm ts;
-        if ((err = trutime_get_utc(time_provider, &ts)) != 0) {
-            LOG_ERR("Could not retrieve the time.");
-        } else {
-            LOG_DBG("Time: %s\n", asctime(&ts));
-        }
-
-        storage_write_row(storage, "example", 7);
+        const uint64_t start = k_uptime_get();
 
         // We are creating a new time sample -- create a new row.
-        //struct experiment_row* row = experiment_row_new();
+        struct experiment_row* row = experiment_row_new(
+            trutime_millis_since(
+                time_provider,
+                experiment_start_time(experiment)
+            )
+        );
 
         // Collect the specified data into the experiment.
-        //collect_data_10hz(row, &ts);
+        collect_data_10hz(row);
 
         // Push these values into the experiment.
-        //if ((err = experiment_push_row(experiment, row)) != 0) {
-        //    LOG_ERR("Failed to push a row into the experiment (%d)", err);
-        //}
+        if ((err = experiment_push_row(experiment, row)) != 0) {
+            LOG_ERR("Failed to push a row into the experiment (%d)", err);
+        }
 
-        const uint32_t stop = k_uptime_get_32();
+        const uint64_t stop = k_uptime_get();
         int64_t sleep_period;
         const bool sleep_will_underflow = __builtin_sub_overflow(
             (int64_t)stop,

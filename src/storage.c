@@ -1,6 +1,7 @@
 // TODO(markovejnovic): Ton of duplication in this file.
 #include "observer.h"
 #include "storage.h"
+#include "str.h"
 #include "thread_specs.h"
 #include "zephyr/fs/fs_interface.h"
 #include <ff.h>
@@ -400,19 +401,26 @@ int storage_transaction(storage_t storage, const struct tm *start_time) {
     return err;
 }
 
-int storage_write_row(storage_t storage, const char *row, size_t row_sz) {
+int storage_write_row(storage_t storage, const struct strv row) {
     int err = 0;
 
-    if ((err = fs_write(&storage->work_file.on_disk, row, row_sz)) < 0) {
+    if ((err = fs_write(&storage->work_file.on_disk, row.str, row.len)) < 0) {
         LOG_ERR("Failed to write row to the disk (%d).", err);
         return err;
     }
 
-    if (++storage->work_file.writes_since_sync > CONFIG_MAX_ROWS_BEFORE_SYNC) {
-        err = storage_flush(storage);
+    if ((err = fs_write(&storage->work_file.on_disk, "\n", 1)) < 0) {
+        LOG_ERR("Failed to write row newline to the disk (%d).", err);
+        return err;
     }
 
-    return err;
+    if (++storage->work_file.writes_since_sync > CONFIG_MAX_ROWS_BEFORE_SYNC) {
+        if ((err = storage_flush(storage)) != 0) {
+            LOG_ERR("Failed to flush data to disk (%d).", err);
+        }
+    }
+
+    return 0;
 }
 
 int storage_close_file(storage_t storage) {

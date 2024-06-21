@@ -14,7 +14,7 @@
 
 #define CONFIG_TRUTIME_MOCK_GNSS
 #ifdef CONFIG_TRUTIME_MOCK_GNSS
-#warning You are currently' using trutime without actual GNSS support. This \
+#warning You are currently using trutime without actual GNSS support. This \
 will result in incorrect time information.
 #endif
 
@@ -149,22 +149,40 @@ trutime_t trutime_init(trutime_t trutime, observer_t obs) {
     return trutime;
 }
 
-int trutime_get_utc(trutime_t trutime, struct tm* out) {
+int trutime_get_utc(trutime_t trutime, struct rtc_time* out) {
     int errno;
 
     if (!atomic_load_explicit(&synced_rtc_with_gps, memory_order_relaxed)) {
         return -ENODATA;
     }
 
-    struct rtc_time rtctime = { 0 };
-    if ((errno = rtc_get_time(rtc_dev, &rtctime)) != 0) {
+    if ((errno = rtc_get_time(rtc_dev, out)) != 0) {
         LOG_ERR("Failed to perform rtc_get_time. Error = %d", errno);
         return errno;
     }
 
-    struct tm *tm_time = rtc_time_to_tm(&rtctime);
-    memcpy(out, tm_time, sizeof(struct tm));
     return 0;
+}
+
+long long trutime_millis_since(trutime_t t, struct rtc_time *since) {
+    struct rtc_time t_now;
+    int err;
+
+    if ((err = trutime_get_utc(t, &t_now)) != 0) {
+        LOG_ERR("Could not retrieve the current time in an attempt to compute "
+                "delta (%d).", err);
+        return err;
+    }
+
+    const double diff_secs = difftime(mktime((struct tm*)&t_now),
+                                      mktime((struct tm*)since));
+    if (diff_secs < 0) {
+        LOG_ERR("Computed negative trutime_millis_since.");
+        return -EINVAL;
+    }
+
+    return (long long)(diff_secs * 1000)
+        + ((t_now.tm_nsec - since->tm_nsec) / 1000000);
 }
 
 bool trutime_is_available(trutime_t t) {

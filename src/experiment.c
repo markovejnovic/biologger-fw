@@ -28,7 +28,6 @@ static void free_caption(struct experiment_caption* capt) {
 }
 
 static void free_row(struct experiment_row* row) {
-    free(row->values);
     free(row);
 }
 
@@ -47,22 +46,29 @@ static void free_columns(struct experiment* exp) {
 /**
  * @brief Format the row of an experiment into CSV form.
  */
-static char* format_row(
+static struct strv format_row(
     char* buf,
-    struct experiment_row* exp,
-    size_t* str_len
+    struct experiment_row* exp
 ) {
     char* write_buf = buf;
-    for (size_t i = 0; i < MAX_EXPERIMENT_COLS; i++) {
+
+    // Write the relative timestamp.
+    write_buf += snprintk(write_buf, MAX_CELL_WIDTH, "%llu,",
+                          exp->millis_since_start);
+
+    // Write every single row value.
+    for (size_t i = 0; i < exp->value_count; i++) {
         const double value = exp->values[i];
         write_buf += snprintk(write_buf, MAX_CELL_WIDTH, "%10.10f,", value);
     }
 
+    // Null terminate the string, overriding the last comma.
     *(--write_buf) = 0;
 
-    *str_len = (write_buf - buf);
-
-    return buf;
+    return (struct strv) {
+        .len = write_buf - buf,
+        .str = buf,
+    };
 }
 
 /**
@@ -83,11 +89,14 @@ static void flush_columns(struct experiment* experiment) {
     char* column_str = malloc(MAX_TOTAL_COL_STR_LEN + 1);
     char* work_ptr = column_str;
 
+    // Add the timestamp column.
+    work_ptr += snprintk(work_ptr, MAX_COL_STR_LEN, "Timestamp [ms],");
+
     // For each single column, convert it to a string and append it to the
     // "long" string representing the columns.
     struct experiment_caption * entry;
     SYS_SLIST_FOR_EACH_CONTAINER(&experiment->columns, entry, node) {
-        work_ptr += snprintk(work_ptr, MAX_COL_UNIT_LEN, "%s [%s],",
+        work_ptr += snprintk(work_ptr, MAX_COL_STR_LEN, "%s [%s],",
                              entry->column_name, entry->unit);
     }
 
@@ -96,8 +105,8 @@ static void flush_columns(struct experiment* experiment) {
     *(--work_ptr) = 0;
 
     const size_t str_len = work_ptr - column_str;
-    if ((err = storage_write_row(experiment->storage, column_str,
-                                 str_len)) != 0) {
+    if ((err = storage_write_row(experiment->storage,
+                                 (struct strv) { column_str, str_len })) != 0) {
         LOG_ERR("Failed to write to storage (%d)", err);
     }
     free(column_str);
@@ -127,12 +136,11 @@ struct experiment* experiment_init(storage_t storage, trutime_t trutime) {
 
     // Seed the start time of the experiment.
     int err;
-    struct tm time;
-    if ((err = trutime_get_utc(trutime, &time)) != 0) {
+    if ((err = trutime_get_utc(trutime, &exp->start_time_utc)) != 0) {
         LOG_ERR("Could not fetch the true time to init the experiment (%d).",
                 err);
     }
-    storage_transaction(storage, &time);
+    storage_transaction(storage, (struct tm*)&exp->start_time_utc);
 
     return exp;
 }
@@ -171,10 +179,13 @@ int experiment_add_column(
     return 0;
 }
 
-struct experiment_row* experiment_row_new(void) {
+struct experiment_row* experiment_row_new(
+    unsigned long long millis_since_start
+) {
     // Allocate values for the row.
     struct experiment_row* row = malloc(sizeof(struct experiment_row));
     row->value_count = 0;
+    row->millis_since_start = millis_since_start;
     return row;
 }
 
@@ -207,12 +218,10 @@ int experiment_flush(struct experiment* experiment) {
     // Write every single experiment into the storage.
     struct experiment_row * entry, * next;
     SYS_SLIST_FOR_EACH_CONTAINER_SAFE(&experiment->rows, entry, next, node) {
-        size_t str_len;
-        const char* const row_str = format_row(row_str_buf, entry, &str_len);
+        const struct strv row_str = format_row(row_str_buf, entry);
 
         // Attempt to write this to persistent storage.
-        if ((err = storage_write_row(experiment->storage, row_str,
-                                     str_len)) != 0) {
+        if ((err = storage_write_row(experiment->storage, row_str)) != 0) {
             LOG_ERR("Failed to push the experiment row.");
             err++;
         }
@@ -231,4 +240,8 @@ int experiment_flush(struct experiment* experiment) {
 int experiment_row_add_value(struct experiment_row *row, double value) {
     row->values[row->value_count++] = value;
     return 0;
+}
+
+struct rtc_time* experiment_start_time(struct experiment* experiment) {
+    return &experiment->start_time_utc;
 }

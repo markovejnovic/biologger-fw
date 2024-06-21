@@ -5,6 +5,7 @@
 #define TRUTIME_H
 
 #include "observer.h"
+#include "zephyr/drivers/rtc.h"
 #include <time.h>
 #include <stdbool.h>
 
@@ -33,7 +34,18 @@ trutime_t trutime_init(struct trutime_data* t, observer_t o);
  *
  * @return The error code if any error occurs.
  */
-int trutime_get_utc(trutime_t t, struct tm* time);
+int trutime_get_utc(trutime_t t, struct rtc_time* time);
+
+/**
+ * @brief Return the total count of milliseconds relative to an instant.
+ *
+ * @param [in] t The trutime object.
+ * @param [in] since The instant to return the total count of millis from.
+ *
+ * @return Negative errno on error or a positive number indicating the number
+ *         of millis.
+ */
+long long trutime_millis_since(trutime_t t, struct rtc_time* since);
 
 /**
  * @brief Query whether the UTC synchronized time is available.
