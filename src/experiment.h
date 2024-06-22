@@ -30,8 +30,8 @@
 #ifndef EXPERIMENT_H
 #define EXPERIMENT_H
 
+#include "trutime.h"
 #include <zephyr/sys/slist.h>
-#include <time.h>
 
 #define MAX_EXPERIMENT_COLS (128)
 
@@ -52,7 +52,7 @@ typedef struct storage* storage_t;
  * added with experiment_push_row.
  */
 struct experiment {
-    struct tm start_time_utc; /*!< The experiment start time. */
+    struct rtc_time start_time_utc; /*!< The experiment start time. */
 
     sys_slist_t columns; /*!< The columns linked list. */
     size_t column_count; /*!< The total number of columns */
@@ -62,26 +62,30 @@ struct experiment {
     size_t rows_count; /*!< The total number of rows. */
 
     storage_t storage; /*!< A reference to the application storage. */
+    trutime_t trutime; /*!< A reference to the application clock provider. */
 };
 
 struct experiment_caption {
-    sys_snode_t node;
     char* column_name;
     char* unit;
+    sys_snode_t node;
 };
 
 struct experiment_row {
-    sys_snode_t node;
     double values[MAX_EXPERIMENT_COLS];
+    size_t value_count;
+    sys_snode_t node;
+    unsigned long long millis_since_start;
 };
 
 /**
  * Initialize and heap allocate a new experiment object.
  *
  * @param [in] storage A storage.h object to write data into.
- * @param [in] time A 
+ * @param [in] trutime The trutime.h object to use as the experiment collection
+ *                     point.
  */
-struct experiment* experiment_init(storage_t storage);
+struct experiment* experiment_init(storage_t storage, trutime_t trutime);
 
 void experiment_free(struct experiment*);
 
@@ -101,8 +105,12 @@ int experiment_add_column(struct experiment* experiment,
 
 /**
  * @brief Create a new heap-allocated experiment row.
+ * @param [in] millis_since_start The total count of milliseconds since the
+ *                                experiment was started.
  */
-struct experiment_row* experiment_row_new(void);
+struct experiment_row* experiment_row_new(
+    unsigned long long millis_since_start
+);
 
 /**
  * @brief Append a new value to the experiment.
@@ -138,5 +146,12 @@ int experiment_push_row(struct experiment* experiment,
  * @param [in] The exeperiment to flush.
  */
 int experiment_flush(struct experiment* experiment);
+
+/**
+ * @brief Retrieve the start time of the experiment.
+ */
+const struct rtc_time* experiment_start_time(
+    const struct experiment* experiment
+);
 
 #endif /* EXPERIMENT_H */

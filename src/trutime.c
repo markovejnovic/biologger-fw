@@ -1,15 +1,21 @@
-#include "trutime.h"
 #include "memex.h"
 #include "observer.h"
+#include "trutime.h"
+#include <stdatomic.h>
 #include <stdbool.h>
 #include <string.h>
 #include <sys/errno.h>
 #include <time.h>
 #include <zephyr/device.h>
 #include <zephyr/drivers/gnss.h>
+#include <zephyr/drivers/gpio.h>
 #include <zephyr/drivers/rtc.h>
 #include <zephyr/logging/log.h>
-#include <zephyr/drivers/gpio.h>
+
+#ifdef CONFIG_TRUTIME_MOCK_GNSS
+#warning You are currently using trutime without actual GNSS support. This \
+will result in incorrect time information.
+#endif
 
 #define DT_GNSS DT_NODELABEL(gnss)
 #define DT_GNSS_DISABLE DT_NODELABEL(gnss_disable)
@@ -23,7 +29,7 @@ static const struct device * const gnss_dev = DEVICE_DT_GET(DT_GNSS);
 static const struct gpio_dt_spec gnss_disable =
     GPIO_DT_SPEC_GET(DT_GNSS_DISABLE, gpios);
 static observer_t observer = NULL;
-static bool synced_rtc_with_gps = false;
+static _Atomic bool synced_rtc_with_gps = false;
 
 static struct tm gnss_time_to_tm(const struct gnss_time* t) {
     const int zero_indexed_mo = t->month - 1u;
@@ -86,7 +92,7 @@ static void gnss_data_callback(
 
     LOG_INF("Aligned the RTC to GNSS.");
     observer_flag_lower(observer, OBSERVER_FLAG_NO_GPS_CLOCK);
-    synced_rtc_with_gps = true;
+    atomic_store_explicit(&synced_rtc_with_gps, true, memory_order_release);
 }
 
 GNSS_DATA_CALLBACK_DEFINE(gnss_dev, gnss_data_callback);
@@ -125,24 +131,61 @@ trutime_t trutime_init(trutime_t trutime, observer_t obs) {
         LOG_ERR("Couldn't enable the GNSS module.");
     }
 
+    // If we are mocking the time due to the absense of a GNSS chip let's set
+    // some fake value.
+#ifdef CONFIG_TRUTIME_MOCK_GNSS
+    struct tm fake_time;
+    fake_time.tm_year = 2023 - 1900;
+    fake_time.tm_mon = 8;
+    fake_time.tm_mday = 9;
+    mktime(&fake_time);
+    rtc_set_time(rtc_dev, (struct rtc_time*)&fake_time);
+    atomic_store_explicit(&synced_rtc_with_gps, true, memory_order_release);
+    observer_flag_lower(observer, OBSERVER_FLAG_NO_GPS_CLOCK);
+#endif
+
     LOG_INF("Initialized trutime.");
     return trutime;
 }
 
-int trutime_get_utc(trutime_t trutime, struct tm* out) {
+int trutime_get_utc(trutime_t trutime, struct rtc_time* out) {
     int errno;
 
-    if (!synced_rtc_with_gps) {
+    if (!atomic_load_explicit(&synced_rtc_with_gps, memory_order_acquire)) {
         return -ENODATA;
     }
 
-    struct rtc_time rtctime = { 0 };
-    if ((errno = rtc_get_time(rtc_dev, &rtctime)) != 0) {
+    if ((errno = rtc_get_time(rtc_dev, out)) != 0) {
         LOG_ERR("Failed to perform rtc_get_time. Error = %d", errno);
         return errno;
     }
 
-    struct tm *tm_time = rtc_time_to_tm(&rtctime);
-    memcpy(out, tm_time, sizeof(struct tm));
     return 0;
+}
+
+long long trutime_millis_since(trutime_t t, const struct rtc_time *since) {
+    struct rtc_time t_now;
+    int err;
+
+    if ((err = trutime_get_utc(t, &t_now)) != 0) {
+        LOG_ERR("Could not retrieve the current time in an attempt to compute "
+                "delta (%d).", err);
+        return err;
+    }
+
+    const double diff_secs = difftime(mktime((struct tm*)&t_now),
+                                      mktime((struct tm*)since));
+    if (diff_secs < 0) {
+        LOG_ERR("Computed negative trutime_millis_since.");
+        return -EINVAL;
+    }
+
+    return (long long)(diff_secs * 1000)
+        + ((t_now.tm_nsec - since->tm_nsec) / 1000000);
+}
+
+bool trutime_is_available(trutime_t t) {
+    (void)t;
+
+    return atomic_load_explicit(&synced_rtc_with_gps, memory_order_acquire);
 }

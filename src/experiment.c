@@ -1,12 +1,12 @@
 #include "experiment.h"
 #include "storage.h"
-#include "zephyr/sys/printk.h"
-#include "zephyr/sys/util.h"
+#include "trutime.h"
 #include <stdlib.h>
 #include <string.h>
 #include <sys/errno.h>
-#include <zephyr/sys/slist.h>
 #include <zephyr/logging/log.h>
+#include <zephyr/sys/printk.h>
+#include <zephyr/sys/slist.h>
 
 #define EXPERIMENT_AUTO_FLUSH_THRESHOLD (10)
 
@@ -19,17 +19,16 @@
 
 static char row_str_buf[MAX_ROW_STR_LEN];
 
-LOG_MODULE_DECLARE(experiment);
+LOG_MODULE_REGISTER(experiment);
 
 static void free_caption(struct experiment_caption* capt) {
-    free(capt->column_name);
-    free(capt->unit);
-    free(capt);
+    k_free(capt->column_name);
+    k_free(capt->unit);
+    k_free(capt);
 }
 
 static void free_row(struct experiment_row* row) {
-    free(row->values);
-    free(row);
+    k_free(row);
 }
 
 static void free_columns(struct experiment* exp) {
@@ -47,16 +46,29 @@ static void free_columns(struct experiment* exp) {
 /**
  * @brief Format the row of an experiment into CSV form.
  */
-static char* format_row(char* buf, struct experiment_row* exp) {
+static struct strv format_row(
+    char* buf,
+    struct experiment_row* exp
+) {
     char* write_buf = buf;
-    for (size_t i = 0; i < MAX_EXPERIMENT_COLS; i++) {
+
+    // Write the relative timestamp.
+    write_buf += snprintk(write_buf, MAX_CELL_WIDTH, "%llu,",
+                          exp->millis_since_start);
+
+    // Write every single row value.
+    for (size_t i = 0; i < exp->value_count; i++) {
         const double value = exp->values[i];
         write_buf += snprintk(write_buf, MAX_CELL_WIDTH, "%10.10f,", value);
     }
 
+    // Null terminate the string, overriding the last comma.
     *(--write_buf) = 0;
 
-    return buf;
+    return (struct strv) {
+        .len = write_buf - buf,
+        .str = buf,
+    };
 }
 
 /**
@@ -66,6 +78,7 @@ static char* format_row(char* buf, struct experiment_row* exp) {
  * a ton of malloc that looks pretty scary.
  */
 static void flush_columns(struct experiment* experiment) {
+    int err;
 // The buffer size is large enough to match the whole column name, the units,
 // the 4 characters " [],". The format is "%s [%s],..." hence the 4 extra
 // characters.
@@ -73,14 +86,21 @@ static void flush_columns(struct experiment* experiment) {
 #define MAX_TOTAL_COL_STR_LEN (MAX_COL_STR_LEN * MAX_EXPERIMENT_COLS)
 
     // Add +1 for '\0'.
-    char* column_str = malloc(MAX_TOTAL_COL_STR_LEN + 1);
+    char* column_str = k_malloc(MAX_TOTAL_COL_STR_LEN + 1);
+    if (column_str == NULL) {
+        LOG_ERR("Failed to initialize enough memory for column_str");
+        return;
+    }
     char* work_ptr = column_str;
+
+    // Add the timestamp column.
+    work_ptr += snprintk(work_ptr, MAX_COL_STR_LEN, "Timestamp [ms],");
 
     // For each single column, convert it to a string and append it to the
     // "long" string representing the columns.
     struct experiment_caption * entry;
     SYS_SLIST_FOR_EACH_CONTAINER(&experiment->columns, entry, node) {
-        work_ptr += snprintk(work_ptr, MAX_COL_UNIT_LEN, "%s [%s],",
+        work_ptr += snprintk(work_ptr, MAX_COL_STR_LEN, "%s [%s],",
                              entry->column_name, entry->unit);
     }
 
@@ -88,16 +108,21 @@ static void flush_columns(struct experiment* experiment) {
     // string.
     *(--work_ptr) = 0;
 
-    storage_write_row(experiment->storage, column_str);
-    free(column_str);
+    const size_t str_len = work_ptr - column_str;
+    if ((err = storage_write_row(experiment->storage,
+                                 (struct strv) { column_str, str_len })) != 0) {
+        LOG_ERR("Failed to write to storage (%d)", err);
+    }
+    k_free(column_str);
 
 #undef MAX_COL_STR_LEN
 #undef MAX_TOTAL_COL_STR_LEN
 }
 
-struct experiment* experiment_init(storage_t storage) {
-    struct experiment* exp = malloc(sizeof(struct experiment));
+struct experiment* experiment_init(storage_t storage, trutime_t trutime) {
+    struct experiment* exp = k_malloc(sizeof(struct experiment));
     if (exp == NULL) {
+        LOG_ERR("Failed to initialize enough memory in experiment_init.");
         return NULL;
     }
 
@@ -109,19 +134,27 @@ struct experiment* experiment_init(storage_t storage) {
     exp->rows_count = 0;
 
     exp->storage = storage;
+    exp->trutime = trutime;
+
+    // We need to open the required file.
+    storage_wait_until_available(storage);
+
+    // Seed the start time of the experiment.
+    int err;
+    if ((err = trutime_get_utc(trutime, &exp->start_time_utc)) != 0) {
+        LOG_ERR("Could not fetch the true time to init the experiment (%d).",
+                err);
+    }
+    storage_transaction(storage, (struct tm*)&exp->start_time_utc);
 
     return exp;
 }
 
 void experiment_free(struct experiment * exp) {
-    if (exp == NULL) {
-        return;
-    }
-
     experiment_flush(exp);
     free_columns(exp);
 
-    free(exp);
+    k_free(exp);
 }
 
 int experiment_add_column(
@@ -129,18 +162,29 @@ int experiment_add_column(
     const char * name,
     const char * units
 ) {
-    struct experiment_caption* node = malloc(sizeof(struct experiment_caption));
+    struct experiment_caption* node
+        = k_malloc(sizeof(struct experiment_caption));
+    if (node == NULL) {
+        LOG_ERR("Failed to initialize enough memory for struct "
+                "experiment_caption");
+        return -ENOMEM;
+    }
 
     const size_t name_len = strlen(name);
-    node->column_name = malloc(name_len + 1);
+    node->column_name = k_malloc(name_len + 1);
     if (node->column_name == NULL) {
+        k_free(node);
+        LOG_ERR("Failed to initialize enough memory for node->column_name");
         return -ENOMEM;
     }
     strncpy(node->column_name, name, name_len + 1);
 
     const size_t unit_len = strlen(units);
-    node->unit = malloc(unit_len + 1);
+    node->unit = k_malloc(unit_len + 1);
     if (node->unit == NULL) {
+        k_free(node->column_name);
+        k_free(node);
+        LOG_ERR("Failed to initialize enough memory for node->unit");
         return -ENOMEM;
     }
     strncpy(node->unit, units, unit_len + 1);
@@ -151,9 +195,18 @@ int experiment_add_column(
     return 0;
 }
 
-struct experiment_row* experiment_row_new(void) {
+struct experiment_row* experiment_row_new(
+    unsigned long long millis_since_start
+) {
     // Allocate values for the row.
-    return malloc(sizeof(struct experiment_row));
+    struct experiment_row* row = k_malloc(sizeof(struct experiment_row));
+    if (row == NULL) {
+        LOG_ERR("Could not k_malloc enough memory for an experiment_row");
+        return NULL;
+    }
+    row->value_count = 0;
+    row->millis_since_start = millis_since_start;
+    return row;
 }
 
 int experiment_push_row(
@@ -185,7 +238,7 @@ int experiment_flush(struct experiment* experiment) {
     // Write every single experiment into the storage.
     struct experiment_row * entry, * next;
     SYS_SLIST_FOR_EACH_CONTAINER_SAFE(&experiment->rows, entry, next, node) {
-        const char* const row_str = format_row(row_str_buf, entry);
+        const struct strv row_str = format_row(row_str_buf, entry);
 
         // Attempt to write this to persistent storage.
         if ((err = storage_write_row(experiment->storage, row_str)) != 0) {
@@ -202,4 +255,15 @@ int experiment_flush(struct experiment* experiment) {
     }
 
     return err;
+}
+
+int experiment_row_add_value(struct experiment_row *row, double value) {
+    row->values[row->value_count++] = value;
+    return 0;
+}
+
+const struct rtc_time* experiment_start_time(
+    const struct experiment* experiment
+) {
+    return &experiment->start_time_utc;
 }

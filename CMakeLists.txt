@@ -7,4 +7,5 @@ project(floggy)
 target_sources(app PRIVATE src/main.c
                            src/observer.c
                            src/trutime.c
-                           src/storage.c)
+                           src/storage.c
+                           src/experiment.c)
