@@ -117,7 +117,7 @@
 &usart3 {
 	pinctrl-0 = <&usart3_tx_pc10 &usart3_rx_pc11>;
 	pinctrl-names = "default";
-	current-speed = <9600>;
+	current-speed = <38400>;
 	status = "okay";
 };
 
