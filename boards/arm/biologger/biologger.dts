@@ -93,7 +93,7 @@
 	apb1-prescaler = <2>;
     // Note that the APB2 clock domain should NOT be very high. The board
     // layout is not good enough to support 50MHz on the SDIO lines.
-	apb2-prescaler = <1>;
+	apb2-prescaler = <8>;
 };
 
 &iwdg {
