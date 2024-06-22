@@ -150,6 +150,8 @@ int experiment_flush(struct experiment* experiment);
 /**
  * @brief Retrieve the start time of the experiment.
  */
-struct rtc_time* experiment_start_time(struct experiment* experiment);
+const struct rtc_time* experiment_start_time(
+    const struct experiment* experiment
+);
 
 #endif /* EXPERIMENT_H */

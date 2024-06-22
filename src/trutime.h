@@ -45,7 +45,7 @@ int trutime_get_utc(trutime_t t, struct rtc_time* time);
  * @return Negative errno on error or a positive number indicating the number
  *         of millis.
  */
-long long trutime_millis_since(trutime_t t, struct rtc_time* since);
+long long trutime_millis_since(trutime_t t, const struct rtc_time* since);
 
 /**
  * @brief Query whether the UTC synchronized time is available.

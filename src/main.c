@@ -99,6 +99,10 @@ int main(void) {
     // Initialize the storage module which is responsible for storing
     // experiment data.
     storage_t storage = storage_init(observer);
+    if (storage == NULL) {
+        LOG_ERR("Could not initialize storage.");
+        return -ENOMEM;
+    }
 
     // Initialize the trutime module which provides with accurate time data.
     trutime_t time_provider = TRUTIME_INIT(time_provider, observer);
@@ -119,6 +123,10 @@ int main(void) {
 
     // Initialize the experiment 
     struct experiment* experiment = experiment_init(storage, time_provider);
+    if (experiment == NULL) { 
+        LOG_ERR("Failed to initialize the experiment");
+        return -1;
+    }
 
     // Populate the experiment with all the required columns.
     declare_columns(experiment);
@@ -133,6 +141,10 @@ int main(void) {
                 experiment_start_time(experiment)
             )
         );
+        if (row == NULL) {
+            LOG_ERR("Failed to allocate sufficient memory for a new row.");
+            continue;
+        }
 
         // Collect the specified data into the experiment.
         collect_data_10hz(row);

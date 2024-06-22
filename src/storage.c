@@ -83,9 +83,12 @@ static bool sdcard_got_dced(storage_t storage) {
         return false;
     }
 
-    uint8_t* _data = k_malloc(storage->block.sz);
-    int res = disk_access_read(DISK_NAME, _data, 2048, 1) != 0;
-    k_free(_data);
+    uint8_t* data = k_malloc(storage->block.sz);
+    if (data == NULL) {
+        return false;
+    }
+    bool res = disk_access_read(DISK_NAME, data, 2048, 1) != 0;
+    k_free(data);
     return res;
 }
 
@@ -237,10 +240,6 @@ K_THREAD_STACK_DEFINE(management_thread_stack,
                       THREAD_BLOCK_STORAGE_MANAGEMENT_STACK_SIZE);
 static struct k_thread management_thread_data;
 
-// Cheap hack. Should be a separate module, but this architecture is all a bit
-// of a hack.
-static bool usb_enabled = false;
-
 static void management_thread_runnable(void* p0, void* p1, void* p2) {
     LOG_INF("Starting to manage storage...");
 
@@ -330,6 +329,10 @@ static void management_thread_runnable(void* p0, void* p1, void* p2) {
 storage_t storage_init(observer_t observer) {
     LOG_INF("Initializing storage...");
     storage_t storage = k_malloc(sizeof(struct storage));
+    if (storage == NULL) {
+        LOG_ERR("Could not k_malloc for storage_init.");
+        return NULL;
+    }
 
     *storage = (struct storage){
         .open_objects = 0,

@@ -93,7 +93,7 @@ static void gnss_data_callback(
 
     LOG_INF("Aligned the RTC to GNSS.");
     observer_flag_lower(observer, OBSERVER_FLAG_NO_GPS_CLOCK);
-    atomic_store_explicit(&synced_rtc_with_gps, true, memory_order_relaxed);
+    atomic_store_explicit(&synced_rtc_with_gps, true, memory_order_release);
 }
 
 GNSS_DATA_CALLBACK_DEFINE(gnss_dev, gnss_data_callback);
@@ -141,7 +141,7 @@ trutime_t trutime_init(trutime_t trutime, observer_t obs) {
     fake_time.tm_mday = 9;
     mktime(&fake_time);
     rtc_set_time(rtc_dev, (struct rtc_time*)&fake_time);
-    atomic_store_explicit(&synced_rtc_with_gps, true, memory_order_relaxed);
+    atomic_store_explicit(&synced_rtc_with_gps, true, memory_order_release);
     observer_flag_lower(observer, OBSERVER_FLAG_NO_GPS_CLOCK);
 #endif
 
@@ -152,7 +152,7 @@ trutime_t trutime_init(trutime_t trutime, observer_t obs) {
 int trutime_get_utc(trutime_t trutime, struct rtc_time* out) {
     int errno;
 
-    if (!atomic_load_explicit(&synced_rtc_with_gps, memory_order_relaxed)) {
+    if (!atomic_load_explicit(&synced_rtc_with_gps, memory_order_acquire)) {
         return -ENODATA;
     }
 
@@ -164,7 +164,7 @@ int trutime_get_utc(trutime_t trutime, struct rtc_time* out) {
     return 0;
 }
 
-long long trutime_millis_since(trutime_t t, struct rtc_time *since) {
+long long trutime_millis_since(trutime_t t, const struct rtc_time *since) {
     struct rtc_time t_now;
     int err;
 
@@ -188,5 +188,5 @@ long long trutime_millis_since(trutime_t t, struct rtc_time *since) {
 bool trutime_is_available(trutime_t t) {
     (void)t;
 
-    return atomic_load_explicit(&synced_rtc_with_gps, memory_order_relaxed);
+    return atomic_load_explicit(&synced_rtc_with_gps, memory_order_acquire);
 }
