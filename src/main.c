@@ -20,6 +20,7 @@
 #include <zephyr/device.h>
 #include "trutime.h"
 #include "storage.h"
+#include "zephyr/sys/printk.h"
 #include <zephyr/drivers/sensor.h>
 #include <zephyr/drivers/adc.h>
 
@@ -30,11 +31,8 @@ LOG_MODULE_REGISTER(main);
 OBSERVER_DECL(main_observer);
 TRUTIME_DECL(time_provider);
 
-#define TSIC DT_NODELABEL(tsic_506)
-static const struct device* tsic_506 = DEVICE_DT_GET(TSIC);
-
 #define ADS1115_DT DT_NODELABEL(ads1115_adc)
-static const struct adc_dt_spec ads1115_adc = ADC_DT_SPEC_GET_BY_NAME(ADS1115_DT, a0);
+static const struct adc_dt_spec ads1115_a0 = ADC_DT_SPEC_GET_BY_NAME(ADS1115_DT, a0);
 
 /**
  * @brief Initialize drivers required for the operation of the application.
@@ -42,21 +40,11 @@ static const struct adc_dt_spec ads1115_adc = ADC_DT_SPEC_GET_BY_NAME(ADS1115_DT
 static int init_drivers() {
     int err = 0;
 
-    if (!adc_is_ready_dt(&ads1115_adc)) {
+    if (!adc_is_ready_dt(&ads1115_a0)) {
         LOG_ERR("The ADC does not appear to be ready.");
     }
-
-    if ((err = adc_channel_setup_dt(&ads1115_adc)) != 0) {
-        LOG_ERR("Failed to setup ADC channel. Error = %d", err);
-    }
-	uint16_t buf;
-	struct adc_sequence sequence = {
-		.buffer = &buf,
-		/* buffer size in bytes, not number of samples */
-		.buffer_size = sizeof(buf),
-	};
-    if ((err = adc_sequence_init_dt(&ads1115_adc, &sequence)) != 0) {
-        LOG_ERR("Failed to init ADC sequence. Error = %d", err);
+    if ((err = adc_channel_setup_dt(&ads1115_a0)) != 0) {
+        LOG_ERR("Failed to setup ADC channel a0. Error = %d", err);
     }
 
     return err;
@@ -69,7 +57,10 @@ static int init_drivers() {
  */
 static void declare_columns(struct experiment* e) {
     //                           Column Name     Units
-    experiment_add_column(e,     "Example",      "");
+    experiment_add_column(e,     "ADC 0",        "mV");
+    //experiment_add_column(e,     "ADC 1",        "mV");
+    //experiment_add_column(e,     "ADC 2",        "mV");
+    //experiment_add_column(e,     "ADC 3",        "mV");
 }
 
 /**
@@ -81,8 +72,27 @@ static void declare_columns(struct experiment* e) {
  *          are to experiment_add_column in declare_columns.
  */
 static void collect_data_10hz(struct experiment_row* r) {
+    int err;
+
+    uint16_t a0_buf;
+    struct adc_sequence a0_seq;
+
+	a0_seq = (struct adc_sequence) {
+		.buffer = &a0_buf,
+		/* buffer size in bytes, not number of samples */
+		.buffer_size = sizeof(a0_buf),
+	};
+    if ((err = adc_sequence_init_dt(&ads1115_a0, &a0_seq)) != 0) {
+        LOG_ERR("Failed to init ADC sequence. Error = %d", err);
+    }
+    (void)adc_sequence_init_dt(&ads1115_a0, &a0_seq);
+    adc_read_dt(&ads1115_a0, &a0_seq);
+    int32_t a0_millivolts = (int32_t)a0_buf;
+    adc_raw_to_millivolts_dt(&ads1115_a0, &a0_millivolts);
+
     //                          The value to commit
-    experiment_row_add_value(r, 42.0);
+    printk("ADC = %"PRId32" mV\n", a0_millivolts);
+    experiment_row_add_value(r, (double)(a0_millivolts * 1000));
 }
 
 int main(void) {

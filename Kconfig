@@ -1,0 +1,9 @@
+menu "Zephyr"
+source "Kconfig.zephyr"
+endmenu
+
+module = APP
+module-str = APP
+
+config TRUTIME_MOCK_GNSS
+        bool "Mock the GNSS module with fake values"
