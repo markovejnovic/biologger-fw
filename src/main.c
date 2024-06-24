@@ -42,9 +42,9 @@ int main(void) {
 
     // Initialize the storage module which is responsible for storing
     // experiment data.
-    storage_t storage = storage_init(observer);
+    //storage_t storage = storage_init(observer);
 
-    trutime_t time_provider = TRUTIME_INIT(time_provider, observer);
+    //trutime_t time_provider = TRUTIME_INIT(time_provider, observer);
 
     if (!device_is_ready(tsic_506)) {
         LOG_ERR("The TSIC506 does not appear to be ready.");
@@ -70,24 +70,24 @@ int main(void) {
     }
 
     while (1) {
-        struct tm ts;
-        if ((errnum = trutime_get_utc(time_provider, &ts)) != 0) {
-            LOG_ERR("Could not retrieve the time.");
-        } else {
-            printk("Time: %s\n", asctime(&ts));
-        }
+        //struct tm ts;
+        //if ((errnum = trutime_get_utc(time_provider, &ts)) != 0) {
+        //    LOG_ERR("Could not retrieve the time.");
+        //} else {
+        //    printk("Time: %s\n", asctime(&ts));
+        //}
 
-        if ((errnum = sensor_sample_fetch(tsic_506)) != 0) {
-            LOG_ERR("Failed to fetch the ambient temp: %d", errnum);
-        }
+        //if ((errnum = sensor_sample_fetch(tsic_506)) != 0) {
+        //    LOG_ERR("Failed to fetch the ambient temp: %d", errnum);
+        //}
 
-        struct sensor_value sv;
-        if ((errnum = sensor_channel_get(tsic_506, SENSOR_CHAN_AMBIENT_TEMP, &sv)) != 0) {
-            LOG_ERR("Failed to measure the ambient temp: %d", errnum);
-        } else {
-            const double svf = sensor_value_to_double(&sv);
-            printk("Temperature: %f\n", svf);
-        }
+        //struct sensor_value sv;
+        //if ((errnum = sensor_channel_get(tsic_506, SENSOR_CHAN_AMBIENT_TEMP, &sv)) != 0) {
+        //    LOG_ERR("Failed to measure the ambient temp: %d", errnum);
+        //} else {
+        //    const double svf = sensor_value_to_double(&sv);
+        //    printk("Temperature: %f\n", svf);
+        //}
 
         if ((errnum = adc_read_dt(&ads1115_adc, &sequence)) != 0) {
             LOG_ERR("Could not read sequence. Error = %d", errnum);
@@ -99,6 +99,6 @@ int main(void) {
         }
         printk("ADC = %"PRId32" mV\n", val_mv);
 
-        k_msleep(1000);
+        k_msleep(10);
     }
 }
