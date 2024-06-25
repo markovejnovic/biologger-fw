@@ -93,7 +93,7 @@
 	apb1-prescaler = <2>;
     // Note that the APB2 clock domain should NOT be very high. The board
     // layout is not good enough to support 50MHz on the SDIO lines.
-	apb2-prescaler = <8>;
+	apb2-prescaler = <1>;
 };
 
 &iwdg {
@@ -167,8 +167,8 @@
 		#address-cells = <1>;
 		#size-cells = <0>;
 
-        io-channels = <&ads1115_adc 0>;
-        io-channel-names = "A0";
+        io-channels = <&ads1115_adc 0>, <&ads1115_adc 1>;
+        io-channel-names = "A0", "A1";
 
 		channel@0 {
 			reg = <0>;
@@ -176,6 +176,7 @@
 			zephyr,reference = "ADC_REF_INTERNAL";
 			zephyr,acquisition-time = <ADC_ACQ_TIME_DEFAULT>;
             zephyr,resolution = <11>;
+            zephyr,input-positive = <0>;
 		};
 		channel@1 {
 			reg = <1>;
@@ -183,19 +184,7 @@
 			zephyr,reference = "ADC_REF_INTERNAL";
 			zephyr,acquisition-time = <ADC_ACQ_TIME_DEFAULT>;
             zephyr,resolution = <11>;
-		};
-		channel@2 {
-			reg = <2>;
-			zephyr,gain = "ADC_GAIN_1";
-			zephyr,reference = "ADC_REF_VDD_1";
-			zephyr,acquisition-time = <ADC_ACQ_TIME_DEFAULT>;
-            zephyr,resolution = <11>;
-		};
-		channel@3 {
-			reg = <3>;
-			zephyr,gain = "ADC_GAIN_1";
-			zephyr,reference = "ADC_REF_VDD_1";
-			zephyr,acquisition-time = <ADC_ACQ_TIME_DEFAULT>;
+            zephyr,input-positive = <1>;
 		};
     };
 };

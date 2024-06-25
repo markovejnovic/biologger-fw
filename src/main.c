@@ -9,7 +9,6 @@
  * you are only attempting to add new columns/rows, please have a look at
  * declare_columns and collect_data_10hz.
  */
-#include <sys/_timespec.h>
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/logging/log_ctrl.h>
@@ -35,6 +34,7 @@ static const struct device* tsic_506 = DEVICE_DT_GET(TSIC);
 
 #define ADS1115_DT DT_NODELABEL(ads1115_adc)
 static const struct adc_dt_spec ads1115_adc = ADC_DT_SPEC_GET_BY_NAME(ADS1115_DT, a0);
+//static const struct adc_dt_spec ads1115_adc1 = ADC_DT_SPEC_GET_BY_NAME(ADS1115_DT, a1);
 
 /**
  * @brief Initialize drivers required for the operation of the application.
@@ -49,15 +49,14 @@ static int init_drivers() {
     if ((err = adc_channel_setup_dt(&ads1115_adc)) != 0) {
         LOG_ERR("Failed to setup ADC channel. Error = %d", err);
     }
-	uint16_t buf;
-	struct adc_sequence sequence = {
-		.buffer = &buf,
-		/* buffer size in bytes, not number of samples */
-		.buffer_size = sizeof(buf),
-	};
-    if ((err = adc_sequence_init_dt(&ads1115_adc, &sequence)) != 0) {
-        LOG_ERR("Failed to init ADC sequence. Error = %d", err);
-    }
+
+    //if (!adc_is_ready_dt(&ads1115_adc1)) {
+    //    LOG_ERR("The ADC1 does not appear to be ready.");
+    //}
+
+    //if ((err = adc_channel_setup_dt(&ads1115_adc1)) != 0) {
+    //    LOG_ERR("Failed to setup ADC channel. Error = %d", err);
+    //}
 
     return err;
 }
@@ -82,6 +81,39 @@ static void declare_columns(struct experiment* e) {
  */
 static void collect_data_10hz(struct experiment_row* r) {
     //                          The value to commit
+    int err;
+
+	uint16_t buf;
+	struct adc_sequence sequence = {
+		.buffer = &buf,
+		/* buffer size in bytes, not number of samples */
+		.buffer_size = sizeof(buf),
+	};
+    int32_t val_mv;
+    err = adc_raw_to_millivolts_dt(&ads1115_adc, &val_mv);
+    printk("ADC0 = %"PRId32" mV\n", val_mv);
+
+    if ((err = adc_sequence_init_dt(&ads1115_adc, &sequence)) != 0) {
+        LOG_ERR("Failed to init ADC sequence. Error = %d", err);
+    }
+    err = adc_read_dt(&ads1115_adc, &sequence);
+    if (err < 0) {
+        printk("Could not read (%d)\n", err);
+        return;
+    }
+
+    //err = adc_raw_to_millivolts_dt(&ads1115_adc1, &val_mv);
+    //printk("ADC1 = %"PRId32" mV\n", val_mv);
+
+    //if ((err = adc_sequence_init_dt(&ads1115_adc1, &sequence)) != 0) {
+    //    LOG_ERR("Failed to init ADC sequence. Error = %d", err);
+    //}
+    //err = adc_read_dt(&ads1115_adc1, &sequence);
+    //if (err < 0) {
+    //    printk("Could not read (%d)\n", err);
+    //    return;
+    //}
+
     experiment_row_add_value(r, 42.0);
 }
 

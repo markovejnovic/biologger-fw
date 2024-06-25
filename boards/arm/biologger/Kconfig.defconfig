@@ -4,4 +4,7 @@
 
 if BOARD_OTHER_BIOLOGGER
 
+config TRUTIME_MOCK_GNSS
+        bool "Fake the trutime GPS (debugging)."
+
 endif # BOARD_OTHER_BIOLOGGER
