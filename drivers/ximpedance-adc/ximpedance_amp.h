@@ -4,21 +4,17 @@
 #include <zephyr/drivers/adc.h>
 #include <zephyr/device.h>
 
-struct ximpedance_amp_config {
-    struct adc_dt_spec adc0;
-    struct adc_dt_spec adc1;
-    struct adc_dt_spec adc2;
-    struct adc_dt_spec adc3;
-};
+#define XIMPEDANCE_AMP_V1_CHANNELS (4)
 
-struct _ximpedance_adc_entry {
-    const struct adc_dt_spec* dt;
-    uint16_t buffer;
-    struct adc_sequence sequence;
+struct ximpedance_amp_config {
 };
 
 struct ximpedance_amp_data {
-    struct _ximpedance_adc_entry all_adcs[4];
+    // Since we mutate the configuration of the ADC during run-time (to pick
+    // the ADC mux pinout) we pack it as data rather than config.
+    struct adc_dt_spec adc_spec;
+
+    int32_t sampled_microamps[XIMPEDANCE_AMP_V1_CHANNELS];
 };
 
 #endif /* XIMPEDANCE_AMP_H */

@@ -156,6 +156,8 @@ def main():
     plt.tight_layout()
     plt.show()
 
+    np.save("data22.npy", np.array((i_swept, v_swept)))
+
 
 
 if __name__ == "__main__":

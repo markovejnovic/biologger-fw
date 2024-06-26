@@ -10,23 +10,54 @@ LOG_MODULE_DECLARE(ximpedance_amp);
 
 static int ximpedance_amp_sample_fetch(const struct device* dev,
                                        enum sensor_channel chan) {
+    struct ximpedance_amp_data* data = dev->data;
+
     if (chan != SENSOR_CHAN_ALL) {
         LOG_ERR("The Ximpedance driver requires you poll the whole sensor.");
         return -ENOTSUP;
     }
 
-    int errnum;
-    int carryover_errnum = 0;
-    struct ximpedance_amp_data* data = dev->data;
-    ARRAY_FOR_EACH_PTR(data->all_adcs, adc) {
-        if ((errnum = adc_read_dt(adc->dt, &adc->sequence)) != 0) {
-            LOG_ERR("Failed to read the value of %s (%d).",
-                    adc->dt->dev->name, errnum);
+    // We cannot simply sample the target channels due to how the ADS1X1X
+    // driver works. We need to reconfigure the channels because we explicitly
+    // need to set input_positive. See the Zephyr
+    // adc_ads1x1x.c:ads1x1x_channel_setup driver for more details.
+    int cum_error = 0;
+    for (size_t channel = 0; channel < XIMPEDANCE_AMP_V1_CHANNELS; channel++) {
+        int err = 0;
+        data->adc_spec.channel_cfg.input_positive = channel;
+        if ((err = adc_channel_setup_dt(&data->adc_spec)) != 0) {
+            LOG_ERR("Failed to setup ADC channel for transimpedance channel %d "
+                    "(%d).", channel, err);
+            goto continue_loop;
         }
-        carryover_errnum = errnum != 0 ? errnum : carryover_errnum;
+
+        // Configure the sequence
+        uint16_t buf;
+        struct adc_sequence sequence = {
+            .buffer = &buf,
+            .buffer_size = sizeof(buf),
+        };
+        if ((err = adc_sequence_init_dt(&data->adc_spec, &sequence)) != 0) {
+            LOG_ERR("Failed to init ADC sequence for transimpedance channel %d "
+                    "(%d).", channel, err);
+            goto continue_loop;
+        }
+
+        int32_t val_mv = (int32_t)buf;
+        if ((err = adc_raw_to_millivolts_dt(&data->adc_spec, &val_mv)) != 0) {
+            LOG_ERR("Failed to convert ADC raw to mV for transimpedance channel"
+                    "%d (%d).", channel, err);
+            goto continue_loop;
+        }
+
+        // Now we need to follow the IV curve to compute the current we just
+        // sampled.
+
+continue_loop:
+        cum_error = MIN(cum_error, err);
     }
 
-    return carryover_errnum;
+    return cum_error;
 }
 
 static int ximpedance_amp_channel_get(const struct device *dev,
@@ -67,49 +98,27 @@ static const struct sensor_driver_api ximpedance_amp_driver_api = {
 };
 
 static int ximpedance_amp_init(const struct device *dev) {
-    const struct ximpedance_amp_config *cfg = dev->config;
     struct ximpedance_amp_data* data = dev->data;
-    int errnum;
+    int err;
 
-    data->all_adcs[0] = (struct _ximpedance_adc_entry){ .dt = &cfg->adc0 };
-    data->all_adcs[1] = (struct _ximpedance_adc_entry){ .dt = &cfg->adc1 };
-    data->all_adcs[2] = (struct _ximpedance_adc_entry){ .dt = &cfg->adc2 };
-    data->all_adcs[3] = (struct _ximpedance_adc_entry){ .dt = &cfg->adc3 };
+    if (!adc_is_ready_dt(&data->adc_spec)) {
+        LOG_ERR("The transimpedance amplifier did not initialize.");
+        return -ENODEV;
+    }
 
-    ARRAY_FOR_EACH_PTR(data->all_adcs, adc) {
-        if (!adc_is_ready_dt(adc->dt)) {
-            LOG_ERR("%s is not ready. Failing.", adc->dt->dev->name);
-            return -ENODEV;
-        }
-
-        if ((errnum = adc_channel_setup_dt(adc->dt)) != 0) {
-            LOG_ERR("Failed to setup the ADC channel for %s (%d).",
-                    adc->dt->dev->name, errnum);
-            return errnum;
-        }
-
-        adc->sequence = (struct adc_sequence){
-            .buffer = &adc->buffer,
-            .buffer_size = sizeof(adc->buffer),
-        };
-
-        if ((errnum = adc_sequence_init_dt(adc->dt, &adc->sequence)) != 0) {
-            LOG_ERR("Failed to initialize the sequence for %s (%d)",
-                    adc->dt->dev->name, errnum);
-        }
+    // Perform a preliminary channel config as a sanity check.
+    if ((err = adc_channel_setup_dt(&data->adc_spec)) != 0) {
+        LOG_ERR("Preliminary failed to setup ADC channel (%d).", err);
     }
 
     return 0;
 }
 
 #define XIMPEDANCE_AMP_DEFINE(inst)                                            \
-    static struct ximpedance_amp_data ximpedance_amp_data_##inst;              \
-    static const struct ximpedance_amp_config ximpedance_amp_config_##inst = { \
-        .adc0 = ADC_DT_SPEC_GET_BY_NAME(DT_NODELABEL(ximpedance_amp_adc), a0), \
-        .adc1 = ADC_DT_SPEC_GET_BY_NAME(DT_NODELABEL(ximpedance_amp_adc), a1), \
-        .adc2 = ADC_DT_SPEC_GET_BY_NAME(DT_NODELABEL(ximpedance_amp_adc), a2), \
-        .adc3 = ADC_DT_SPEC_GET_BY_NAME(DT_NODELABEL(ximpedance_amp_adc), a3), \
+    static struct ximpedance_amp_data ximpedance_amp_data_##inst = {           \
+        .adc_spec = ADC_DT_SPEC_GET_BY_NAME(DT_NODELABEL(ximpedance_amp), a0), \
     };                                                                         \
+    static const struct ximpedance_amp_config ximpedance_amp_config_##inst;    \
                                                                                \
     SENSOR_DEVICE_DT_INST_DEFINE(inst, ximpedance_amp_init, NULL,              \
                                  &ximpedance_amp_data_##inst,                  \

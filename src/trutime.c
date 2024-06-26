@@ -12,6 +12,7 @@
 #include <zephyr/drivers/rtc.h>
 #include <zephyr/logging/log.h>
 
+#define CONFIG_TRUTIME_MOCK_GNSS
 #ifdef CONFIG_TRUTIME_MOCK_GNSS
 #warning You are currently using trutime without actual GNSS support. This \
 will result in incorrect time information.
