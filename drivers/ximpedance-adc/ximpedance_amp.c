@@ -1,4 +1,6 @@
 #include "ximpedance_amp.h"
+#include "v2i_ximpedance10x_lut.h"
+#include "v2i_ximpedance22x_lut.h"
 #include <sys/errno.h>
 #include <zephyr/drivers/adc.h>
 #include <zephyr/devicetree.h>
@@ -7,6 +9,19 @@
 #include <zephyr/sys/util.h>
 
 LOG_MODULE_DECLARE(ximpedance_amp);
+
+inline static int32_t get_nanoamps_for_microvolts(size_t adc_idx, int32_t uv) {
+    switch (adc_idx) {
+        case 0:
+        case 1:
+            return v2i_ximpedance22x_lut_get_nanoamps_from_microvolts(uv);
+        case 2:
+        case 3:
+            return v2i_ximpedance10x_lut_get_nanoamps_from_microvolts(uv);
+    }
+
+    return 0;
+}
 
 static int ximpedance_amp_sample_fetch(const struct device* dev,
                                        enum sensor_channel chan) {
@@ -52,6 +67,8 @@ static int ximpedance_amp_sample_fetch(const struct device* dev,
 
         // Now we need to follow the IV curve to compute the current we just
         // sampled.
+        data->sampled_nanoamps[channel] =
+            get_nanoamps_for_microvolts(channel, val_mv);
 
 continue_loop:
         cum_error = MIN(cum_error, err);
@@ -66,29 +83,32 @@ static int ximpedance_amp_channel_get(const struct device *dev,
     struct ximpedance_amp_data* data = dev->data;
 
     size_t adc_index;
-    switch (chan) {
-        case 0:
-        case 1:
-        case 2:
-        case 3:
-            adc_index = (size_t)chan;
+    switch ((int)chan) {
+        case XIMPEDANCE_CHAN_22KX_MILLIAMPS_1:
+            adc_index = 0;
+            break;
+
+        case XIMPEDANCE_CHAN_22KX_MILLIAMPS_2:
+            adc_index = 1;
+            break;
+
+        case XIMPEDANCE_CHAN_10KX_MILLIAMPS_1:
+            adc_index = 2;
+            break;
+
+        case XIMPEDANCE_CHAN_10KX_MILLIAMPS_2:
+            adc_index = 3;
+            break;
+
         default:
             LOG_ERR("The Ximpedance requires chan is one of 0-3.");
             return -ENOTSUP;
     }
 
-    struct _ximpedance_adc_entry* adc = &data->all_adcs[adc_index];
-    int errnum;
+    int32_t nanoamps = data->sampled_nanoamps[adc_index];
+    val->val1 = nanoamps / (1000 * 1000);
+    val->val2 = nanoamps % (1000 * 1000);
 
-    int32_t val_mv = (int32_t)adc->buffer;
-    if ((errnum = adc_raw_to_millivolts_dt(adc->dt, &val_mv)) != 0) {
-        LOG_ERR("Failed to convert raw ADC value to mV for %s (%d)",
-                adc->dt->dev->name, errnum);
-        return errnum;
-    }
-
-    // TODO(markovejnovic): This conversion is just wrong.
-    val->val1 = val_mv;
     return 0;
 }
 
