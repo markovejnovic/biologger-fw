@@ -1,0 +1,3 @@
+if SENSOR
+rsource "ximpedance_amp/Kconfig"
+endif # SENSOR

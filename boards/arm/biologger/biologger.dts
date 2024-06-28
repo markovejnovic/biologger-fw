@@ -50,6 +50,12 @@
         };
     };
 
+    ximpedance_amp: ximpedance_amp {
+        compatible = "ximpedance_amp";
+        status = "okay";
+        adc = <&ads1115_adc>;
+    };
+
     aliases {
         board-usart-1 = &usart1;
         board-usart-2 = &usart6;
@@ -160,7 +166,7 @@
 	status = "okay";
 	clock-frequency = <I2C_BITRATE_STANDARD>;
 
-    ximpedance_amp: ads1115_adc@48 {
+    ads1115_adc: ads1115_adc@48 {
         status = "okay";
         compatible = "ti,ads1015";
 		reg = <0x48>;
@@ -168,7 +174,7 @@
 		#address-cells = <1>;
 		#size-cells = <0>;
 
-        io-channels = <&ximpedance_amp 0>;
+        io-channels = <&ads1115_adc 0>;
         io-channel-names = "A0";
 
 		channel@0 {

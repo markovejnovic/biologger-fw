@@ -3,7 +3,10 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import textwrap
+import collections
 
+def strictly_decreasing(L):
+    return all(x>y for x, y in zip(L, L[1:]))
 
 
 def codegen(name: str, arr: np.ndarray):
@@ -62,13 +65,20 @@ def codegen(name: str, arr: np.ndarray):
 
 
 def optimally_decimate_array(arr: np.ndarray) -> np.ndarray:
-    diff_ord2_magn = np.abs(np.diff(np.diff(arr[1])))
+    interesting_values = np.array([[p[0], p[1]] for p in arr.T if p[0] <
+                                   1e-5]).T
+    diff_ord2_magn = np.abs(np.diff(np.diff(interesting_values[1])))
     normalized_interest_dist = diff_ord2_magn / np.sum(diff_ord2_magn)
     N_lut = 20
-    samples = sorted(np.random.choice(len(normalized_interest_dist), size=N_lut - 2, p=normalized_interest_dist))
-    xs = np.array([arr[0][0]] + list(arr[0][samples]) + [arr[0][-1]])
-    ys = np.array([arr[1][0]] + list(arr[1][samples]) + [arr[1][-1]])
-    return np.array((xs, ys))
+    while True:
+        samples = sorted(np.random.choice(len(normalized_interest_dist), size=N_lut - 2, p=normalized_interest_dist))
+        xs = np.array([interesting_values[0][0]] + list(interesting_values[0][samples]) +
+                      [interesting_values[0][-1]])
+        ys = np.array([interesting_values[1][0]] + list(interesting_values[1][samples]) +
+                      [interesting_values[1][-1]])
+        if all(c == 1 for _, c in collections.Counter(xs).items()) and \
+            strictly_decreasing(xs):
+            return np.array((xs, ys))
 
 
 def main():

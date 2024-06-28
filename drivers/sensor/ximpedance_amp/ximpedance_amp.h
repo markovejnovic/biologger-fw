@@ -1,10 +1,10 @@
 #ifndef XIMPEDANCE_AMP_H
 #define XIMPEDANCE_AMP_H
 
+#include <zephyr/device.h>
+#include <zephyr/drivers/adc.h>
 #include <zephyr/drivers/sensor.h>
 #include <zephyr/sys/util.h>
-#include <zephyr/drivers/adc.h>
-#include <zephyr/device.h>
 
 #define XIMPEDANCE_AMP_V1_CHANNELS (4)
 #define XIMPEDANCE_AMP_22K_GAIN_CHANNELS { 0, 1 }

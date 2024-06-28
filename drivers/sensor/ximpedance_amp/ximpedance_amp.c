@@ -1,3 +1,5 @@
+#define DT_DRV_COMPAT ximpedance_amp
+
 #include "ximpedance_amp.h"
 #include "v2i_ximpedance10x_lut.h"
 #include "v2i_ximpedance22x_lut.h"
@@ -8,7 +10,7 @@
 #include <zephyr/logging/log.h>
 #include <zephyr/sys/util.h>
 
-LOG_MODULE_DECLARE(ximpedance_amp);
+LOG_MODULE_REGISTER(ximpedance_amp);
 
 inline static int32_t get_nanoamps_for_microvolts(size_t adc_idx, int32_t uv) {
     switch (adc_idx) {
@@ -58,6 +60,12 @@ static int ximpedance_amp_sample_fetch(const struct device* dev,
             goto continue_loop;
         }
 
+        if ((err = adc_read_dt(&data->adc_spec, &sequence) != 0)) {
+            LOG_ERR("Failed to read the data for transimpedance channel %d "
+                    "(%d).", channel, err);
+            goto continue_loop;
+        }
+
         int32_t val_mv = (int32_t)buf;
         if ((err = adc_raw_to_millivolts_dt(&data->adc_spec, &val_mv)) != 0) {
             LOG_ERR("Failed to convert ADC raw to mV for transimpedance channel"
@@ -68,7 +76,7 @@ static int ximpedance_amp_sample_fetch(const struct device* dev,
         // Now we need to follow the IV curve to compute the current we just
         // sampled.
         data->sampled_nanoamps[channel] =
-            get_nanoamps_for_microvolts(channel, val_mv);
+            get_nanoamps_for_microvolts(channel, val_mv * 1000);
 
 continue_loop:
         cum_error = MIN(cum_error, err);
@@ -112,7 +120,7 @@ static int ximpedance_amp_channel_get(const struct device *dev,
     return 0;
 }
 
-static const struct sensor_driver_api ximpedance_amp_driver_api = {
+static const struct sensor_driver_api ximpedance_amp_api = {
     .sample_fetch = ximpedance_amp_sample_fetch,
     .channel_get = ximpedance_amp_channel_get,
 };
@@ -136,7 +144,11 @@ static int ximpedance_amp_init(const struct device *dev) {
 
 #define XIMPEDANCE_AMP_DEFINE(inst)                                            \
     static struct ximpedance_amp_data ximpedance_amp_data_##inst = {           \
-        .adc_spec = ADC_DT_SPEC_GET_BY_NAME(DT_NODELABEL(ximpedance_amp), a0), \
+        /* TODO(markovejnovic): Really should use the phandle in               \
+         * ximpedance_amp/adc rather than directly using NODELABEL. It's 130AM \
+         * on a thursday and I CBA to figure out why it didn't work when I     \
+         * tried it. */                                                        \
+        .adc_spec = ADC_DT_SPEC_GET_BY_NAME(DT_NODELABEL(ads1115_adc), a0),    \
     };                                                                         \
     static const struct ximpedance_amp_config ximpedance_amp_config_##inst;    \
                                                                                \

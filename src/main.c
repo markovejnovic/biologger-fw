@@ -22,12 +22,12 @@
 #include "storage.h"
 #include <zephyr/drivers/sensor.h>
 #include <zephyr/drivers/adc.h>
-#include "ximpedance_amp/ximpedance_amp.h"
+#include "sensor/ximpedance_amp/ximpedance_amp.h"
 #include <zephyr/sys/printk.h>
 #include <zephyr/sys/util.h>
 #include <zephyr/drivers/sensor.h>
 
-#define SAMPLING_PERIOD_MS 1000
+#define SAMPLING_PERIOD_MS 100
 
 LOG_MODULE_REGISTER(main);
 

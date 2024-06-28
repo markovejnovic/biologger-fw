@@ -1,0 +1,6 @@
+zephyr_library()
+
+zephyr_library_add_dependencies(offsets_h)
+zephyr_library_sources_ifdef(CONFIG_XIMPEDANCE_AMP ximpedance_amp.c)
+zephyr_library_sources_ifdef(CONFIG_XIMPEDANCE_AMP v2i_ximpedance22x_lut.c)
+zephyr_library_sources_ifdef(CONFIG_XIMPEDANCE_AMP v2i_ximpedance10x_lut.c)

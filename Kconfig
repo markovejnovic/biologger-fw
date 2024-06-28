@@ -1,0 +1,4 @@
+mainmenu "Biologger Config"
+
+source "Kconfig.zephyr"
+rsource "drivers/Kconfig"

@@ -9,6 +9,13 @@ target_sources(app PRIVATE src/main.c
                            src/trutime.c
                            src/storage.c
                            src/experiment.c
-                           drivers/ximpedance_amp/ximpedance_amp.c)
+                           # TODO(markovejnovic) Following 3 are hacks. The
+                           # cmake spec should be in the ximpedance cmakelists
+                           # but I can't get it to link.
+                           drivers/sensor/ximpedance_amp/ximpedance_amp.c
+                           drivers/sensor/ximpedance_amp/v2i_ximpedance22x_lut.c
+                           drivers/sensor/ximpedance_amp/v2i_ximpedance10x_lut.c)
 
 target_include_directories(app PRIVATE drivers)
+
+add_subdirectory(drivers)
