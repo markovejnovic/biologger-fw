@@ -168,7 +168,7 @@
 		#address-cells = <1>;
 		#size-cells = <0>;
 
-        io-channels = <&ads1115_adc 0>;
+        io-channels = <&ximpedance_amp 0>;
         io-channel-names = "A0";
 
 		channel@0 {

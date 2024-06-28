@@ -8,4 +8,7 @@ target_sources(app PRIVATE src/main.c
                            src/observer.c
                            src/trutime.c
                            src/storage.c
-                           src/experiment.c)
+                           src/experiment.c
+                           drivers/ximpedance_amp/ximpedance_amp.c)
+
+target_include_directories(app PRIVATE drivers)

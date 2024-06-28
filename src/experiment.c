@@ -267,3 +267,14 @@ const struct rtc_time* experiment_start_time(
 ) {
     return &experiment->start_time_utc;
 }
+
+struct strv experiment_row_format(struct experiment_row *row) {
+    char* memory = k_malloc(MAX_ROW_STR_LEN);
+    if unlikely(memory == NULL) {
+        LOG_ERR("Failed to allocate memory. The system is now in an "
+                "indeterminate state");
+        return (struct strv){};
+    }
+
+    return format_row(memory, row);
+}

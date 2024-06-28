@@ -1,2 +1,2 @@
-source "ximpedance-adc/Kconfig"
+source "ximpedance_amp/Kconfig"
 source "trisonica-mini/Kconfig"

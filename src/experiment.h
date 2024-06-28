@@ -124,6 +124,15 @@ struct experiment_row* experiment_row_new(
 int experiment_row_add_value(struct experiment_row* row, double value);
 
 /**
+ * @brief Format a row to a new heap-allocated string. The string is guaranteed
+ *        to be null-terminated.
+ * @warning This new string MUST be k_freed.
+ *
+ * @param [in] row The experiment row to format.
+ */
+struct strv experiment_row_format(struct experiment_row* row);
+
+/**
  * @brief Append a new row to an already-open experiment.
  *
  * @param [in] experiment The experiment to add a new row to.
