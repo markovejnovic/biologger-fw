@@ -50,6 +50,12 @@
         };
     };
 
+    ximpedance_amp: ximpedance_amp {
+        compatible = "ximpedance_amp";
+        status = "okay";
+        adc = <&ads1115_adc>;
+    };
+
     aliases {
         board-usart-1 = &usart1;
         board-usart-2 = &usart6;
@@ -161,6 +167,7 @@
 	clock-frequency = <I2C_BITRATE_STANDARD>;
 
     ads1115_adc: ads1115_adc@48 {
+        status = "okay";
         compatible = "ti,ads1015";
 		reg = <0x48>;
 		#io-channel-cells = <1>;
@@ -176,26 +183,6 @@
 			zephyr,reference = "ADC_REF_INTERNAL";
 			zephyr,acquisition-time = <ADC_ACQ_TIME_DEFAULT>;
             zephyr,resolution = <11>;
-		};
-		channel@1 {
-			reg = <1>;
-			zephyr,gain = "ADC_GAIN_1";
-			zephyr,reference = "ADC_REF_INTERNAL";
-			zephyr,acquisition-time = <ADC_ACQ_TIME_DEFAULT>;
-            zephyr,resolution = <11>;
-		};
-		channel@2 {
-			reg = <2>;
-			zephyr,gain = "ADC_GAIN_1";
-			zephyr,reference = "ADC_REF_VDD_1";
-			zephyr,acquisition-time = <ADC_ACQ_TIME_DEFAULT>;
-            zephyr,resolution = <11>;
-		};
-		channel@3 {
-			reg = <3>;
-			zephyr,gain = "ADC_GAIN_1";
-			zephyr,reference = "ADC_REF_VDD_1";
-			zephyr,acquisition-time = <ADC_ACQ_TIME_DEFAULT>;
 		};
     };
 };

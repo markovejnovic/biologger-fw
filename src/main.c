@@ -22,6 +22,10 @@
 #include "storage.h"
 #include <zephyr/drivers/sensor.h>
 #include <zephyr/drivers/adc.h>
+#include "sensor/ximpedance_amp/ximpedance_amp.h"
+#include <zephyr/sys/printk.h>
+#include <zephyr/sys/util.h>
+#include <zephyr/drivers/sensor.h>
 
 #define SAMPLING_PERIOD_MS 100
 
@@ -30,33 +34,26 @@ LOG_MODULE_REGISTER(main);
 OBSERVER_DECL(main_observer);
 TRUTIME_DECL(time_provider);
 
-#define TSIC DT_NODELABEL(tsic_506)
-static const struct device* tsic_506 = DEVICE_DT_GET(TSIC);
+/******************************************************************************
+ * Devices Used On The Board
+ *****************************************************************************/
+static const struct device* ximpedance_amp =
+    DEVICE_DT_GET(DT_NODELABEL(ximpedance_amp));
 
-#define ADS1115_DT DT_NODELABEL(ads1115_adc)
-static const struct adc_dt_spec ads1115_adc = ADC_DT_SPEC_GET_BY_NAME(ADS1115_DT, a0);
+/******************************************************************************
+ * Static Variables Used In This Module
+ *****************************************************************************/
+static size_t collection_counter = 0;
 
 /**
  * @brief Initialize drivers required for the operation of the application.
  */
 static int init_drivers() {
-    int err = 0;
+    int err = 0; // 0 means no error :)
 
-    if (!adc_is_ready_dt(&ads1115_adc)) {
-        LOG_ERR("The ADC does not appear to be ready.");
-    }
-
-    if ((err = adc_channel_setup_dt(&ads1115_adc)) != 0) {
-        LOG_ERR("Failed to setup ADC channel. Error = %d", err);
-    }
-	uint16_t buf;
-	struct adc_sequence sequence = {
-		.buffer = &buf,
-		/* buffer size in bytes, not number of samples */
-		.buffer_size = sizeof(buf),
-	};
-    if ((err = adc_sequence_init_dt(&ads1115_adc, &sequence)) != 0) {
-        LOG_ERR("Failed to init ADC sequence. Error = %d", err);
+    if (!device_is_ready(ximpedance_amp)) {
+        LOG_ERR("Failed to initialize the transimpedance driver.");
+        err = -ENODEV;
     }
 
     return err;
@@ -68,8 +65,11 @@ static int init_drivers() {
  * This function must only contain calls to experiment_add_column.
  */
 static void declare_columns(struct experiment* e) {
-    //                           Column Name     Units
-    experiment_add_column(e,     "Example",      "");
+    //                           Column Name              Units
+    experiment_add_column(e,     "Current 22KX 1",        "mA");
+    experiment_add_column(e,     "Current 22KX 2",        "mA");
+    experiment_add_column(e,     "Current 10KX 1",        "mA");
+    experiment_add_column(e,     "Current 10KX 2",        "mA");
 }
 
 /**
@@ -80,9 +80,45 @@ static void declare_columns(struct experiment* e) {
  * @warning There must be as many calls to experiment_row_add_value as there
  *          are to experiment_add_column in declare_columns.
  */
-static void collect_data_10hz(struct experiment_row* r) {
-    //                          The value to commit
-    experiment_row_add_value(r, 42.0);
+static int collect_data_10hz(struct experiment_row* r) {
+    int err = 0; // 0 means no error :)
+    
+    if ((err = sensor_sample_fetch(ximpedance_amp)) != 0) {
+        LOG_ERR("Failed to sample the results from the transimpedance "
+                "amplifier (%d).", err);
+    }
+
+    static const enum ximpedance_amp_sensor_channel
+    ximpedance_amp_channels[] = {
+        XIMPEDANCE_CHAN_22KX_MILLIAMPS_1,
+        XIMPEDANCE_CHAN_22KX_MILLIAMPS_2,
+        XIMPEDANCE_CHAN_10KX_MILLIAMPS_1,
+        XIMPEDANCE_CHAN_10KX_MILLIAMPS_2,
+    };
+    for (size_t i = 0; i < ARRAY_SIZE(ximpedance_amp_channels); i++) {
+        struct sensor_value val;
+        if ((err = sensor_channel_get(ximpedance_amp,
+                                      (int)ximpedance_amp_channels[i],
+                                      &val)) != 0) {
+            LOG_ERR("Failed to fetch the sensor channel %d value (%d).",
+                    ximpedance_amp_channels[i], err);
+            err = MIN(err, 0);
+        }
+
+        const double value_milliamps = sensor_value_to_double(&val);
+
+        experiment_row_add_value(r, value_milliamps);
+    }
+
+    // Printout every 10th row.
+    if (collection_counter == 0) {
+        const struct strv printout = experiment_row_format(r);
+        printk("%s\n", printout.str);
+        k_free(printout.str);
+    }
+    collection_counter = (collection_counter + 1) % 10;
+
+    return err;
 }
 
 int main(void) {
@@ -147,7 +183,7 @@ int main(void) {
         }
 
         // Collect the specified data into the experiment.
-        collect_data_10hz(row);
+        (void)collect_data_10hz(row);
 
         // Push these values into the experiment.
         if ((err = experiment_push_row(experiment, row)) != 0) {

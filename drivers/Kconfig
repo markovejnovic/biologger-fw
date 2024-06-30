@@ -1,2 +1,3 @@
-source "ximpedance-adc/Kconfig"
-source "trisonica-mini/Kconfig"
+menu "Drivers"
+rsource "sensor/Kconfig"
+endmenu

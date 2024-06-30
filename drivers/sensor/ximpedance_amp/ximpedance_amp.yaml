@@ -1,0 +1,8 @@
+description: |
+  Ximpedance Amplifier Driver.
+compatible: "ximpedance_amp"
+properties:
+  adc:
+    required: true
+    type: phandle
+include: [sensor-device.yaml]
